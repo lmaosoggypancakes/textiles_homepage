@@ -351,7 +351,7 @@ const getProcessing = () => {
         points: points.value
     }))
 }
-const ws = new WebSocket("ws://localhost:8000/session")
+const ws = new WebSocket("ws://stretch.up.railway.app/session")
 const wsOpen = ref(false)
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data)
