@@ -107,7 +107,7 @@
 import { ref, render, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ChevronRightIcon, ChevronLeftIcon } from "@heroicons/vue/24/outline";
-import { type PhysicalConnection, type PhysicalNode, type Constraint, type Breakout } from "types";
+import { type PhysicalConnection, type PhysicalNode, type Constraint, type Breakout } from "../../types";
 import { centroid, isIn } from "@/../util"
 
 import svg from "@/assets/module.svg"
