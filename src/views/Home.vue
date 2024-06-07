@@ -33,8 +33,12 @@ const startFileUpload = () => {
 
 const filePicked = (event: Event) => {
   loading.value = true
-
-  const file = event.target.files[0];
+  const target = event.target as HTMLInputElement
+  if (target == null || target.files == null) {
+    alert("Error: bad event")
+    return
+  }
+  const file = target.files[0]
   fileName.value = file.name
   console.log(file)
   const reader = new FileReader()
@@ -45,7 +49,11 @@ const filePicked = (event: Event) => {
     statusMessage.value = ""
     const data = reader.result;
     loading.value = false
-    await parseFile(data)
+    if (data == null) {
+      alert("data is null. tell josef pls")
+      return;
+    }
+    await parseFile(data as string)
   };
 
   reader.onerror = () => {
@@ -61,7 +69,7 @@ const parseFile = async (data: string) => {
   }).catch((reason: AxiosError) => {
     console.log(reason)
     if(reason.response?.status == 400) {
-      statusMessage.value = reason.response?.data?.detail || "unknown error. tell josef pls :(";
+      statusMessage.value = (reason.response?.data as any).detail || "unknown error. tell josef pls :("; // i hate this
     }
     if (reason.response?.status == 500) {
       statusMessage.value = "Internal server error </3"
