@@ -20,7 +20,7 @@
                 <input type="range" min="1" max="100" value="2" class="w-full" v-model="stretchification" />
 
                 <span>y/w Ratio</span>
-                <input type="range" min="10" max="30" value="11" class="w-full" v-model="stretchDepth" />
+                <input type="range" min="1" max="30" value="11" class="w-full" v-model="stretchDepth" />
 
                 <span>Time</span>
                 <input type="range" min="0" max="100" value="0" class="w-full" v-model="time" />
@@ -107,7 +107,7 @@
 import { ref, render, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ChevronRightIcon, ChevronLeftIcon } from "@heroicons/vue/24/outline";
-import { type PhysicalConnection, type PhysicalNode, type Constraint, Breakout } from "types";
+import { type PhysicalConnection, type PhysicalNode, type Constraint, type Breakout } from "types";
 import { centroid, isIn } from "@/../util"
 
 import svg from "@/assets/module.svg"
@@ -154,14 +154,13 @@ const prettyVector = (v: { angle: number, mag: number }) => {
     return `(${v.mag.toFixed(2)}, ${v.angle.toFixed(2)})`
 }
 function renderGraph(nodeList: PhysicalNode[] = nodes.value, pointList: [number, number][][] = points.value) {
-    clearCavnas()
+    // clearCavnas()
     if (!canvas.value) return;
     
     const ctx = canvas.value?.getContext("2d")
     if (!ctx) return
     ctx.clearRect(0,0,canvas.value.width, canvas.value.height)
     ctx.fillStyle = "#685A80"
-    
     paths.value.forEach(path => {
         ctx.beginPath()
         ctx.strokeStyle = "#c4a7e7"
@@ -183,13 +182,12 @@ function renderGraph(nodeList: PhysicalNode[] = nodes.value, pointList: [number,
         ctx.font = "18px serif"
         ctx.fillText(node.ref, node.x - 10, node.y + 4)
     })
-    ctx.strokeStyle = ctx.fillStyle = "#ebbcba"
-    
+    ctx.strokeStyle = ctx.fillStyle = "#9ccfd8"
     pointList.forEach(conn => {
         ctx.beginPath()
         ctx.moveTo(conn[0][0], conn[0][1])
-        conn.forEach(point => {
-            ctx.lineTo(point[0], point[1])
+        conn.forEach((point: any) => { // fix pls
+            ctx.lineTo(point[1], point[2])
         })
         ctx.stroke()
     })
@@ -268,7 +266,7 @@ const handleDrag = (event: MouseEvent) => {
         }
     })
 
-    clearCavnas()
+    // clearCavnas()
     renderGraph()
 }
 
@@ -357,11 +355,11 @@ const ws = new WebSocket("ws://localhost:8000/session")
 const wsOpen = ref(false)
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data)
+    console.log(data.label)
     // console.log(`[${data.label}] ${data.message || data.nodes}`)
     if (data.label == "graph") {
         // renderInitialGraph(data.nodes, data.points)
     }
-
     if (data.label == "paths") {
         clearCavnas();
         
@@ -369,7 +367,7 @@ ws.onmessage = (event) => {
         if (nodes_original.value.length == 0) {
             nodes_original.value = nodes.value
         }
-        console.log(data.points.length)
+        // console.log(data.points.length)
         points.value = data.points
         renderGraph()
     }
@@ -384,6 +382,10 @@ ws.onmessage = (event) => {
         const blob = new Blob([data.file], {type: "text/plain"})
         const url = URL.createObjectURL(blob)
         window.open(url)
+    }
+
+    if (data.label == "message") {
+        alert(data.message)
     }
 }
 ws.onopen = () => {
@@ -401,17 +403,17 @@ ws.onopen = () => {
 
 
 watch([stretchDepth, stretchification, time], (v) => {
-    clearCavnas()
+    // clearCavnas()
     if (wsOpen.value) {
+        console.log(v[0], v[1], v[2 ])
         ws.send(JSON.stringify({
             label: "after_time",
-            stretchification: v[1],
-            depth: v[0]/10,
+            stretchification: v[0],
+            depth: v[1],
             nodes: nodes_original.value,
             time: +time.value,
             constraints: constraints.value
         }))
-    }
-}
-)
+    }   
+})
 </script>
