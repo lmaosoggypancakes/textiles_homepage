@@ -5,15 +5,8 @@
     -
 -->
 <template>
-    <main class="h-full flex">
-        <div class="fixed w-96 h-full bg-surface transition-all rounded-bl-md left-0 z-10 flex flex-col relative"
-            :class="!showSidebar && '-translate-x-96'">
-            <button
-                class="absolute w-16 h-16 -right-16 rounded-tr-md rounded-br-md bg-overlay hover:bg-surface transition-colors hover:border-surface hover:scale-95 p-2"
-                @click="showSidebar = !showSidebar">
-                <ChevronLeftIcon class="text-rose" v-if="showSidebar" />
-                <ChevronRightIcon class="text-rose" v-else />
-            </button>
+    <main class="h-full flex flex-col justify-center items-center relative">
+        <div class="absolute left-0 w-1/4 h-full     bg-surface transition-all rounded-bl-md z-10 flex flex-col">
             <div class="px-12 py-8 text-text grow">
                 <p class="text-2xl font-bold">Configuration</p>
                 <span>Stretchification</span>
@@ -32,6 +25,9 @@
             </div>
         </div>
         <div class="h-full flex flex-col justify-center items-center mx-auto relative w-full">
+            <div role="tablist" class="tabs tabs-lifted">
+                <a role="tab" class="tab" v-for="(_, idx) in Array(10)" :class="idx == selectedLayer && 'tab-active [--tab-bg:#ebbcba] text-base'" @click="selectedLayer = idx">Layer {{ idx }}</a>
+            </div>
             <span class=" bg-warning/40 text-warning rounded font-semibold px-4 py-1 mb-8"
                 v-if="highlightedNode && enableDrawConstraint">Draw a (small) shape around {{ highlightedNode.ref }}</span>
             <span class=" bg-foam/40 text-foam rounded font-semibold px-4 py-1 mb-8"
@@ -113,6 +109,8 @@ import { centroid, isIn } from "@/../util"
 import svg from "@/assets/module.svg"
 const img = new Image()
 img.src = svg;
+
+const selectedLayer = ref(0)
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const showSidebar = ref(true)
@@ -351,7 +349,7 @@ const getProcessing = () => {
         points: points.value
     }))
 }
-const ws = new WebSocket("ws://stretch.up.railway.app/session")
+const ws = new WebSocket("ws://localhost:8000/session")
 const wsOpen = ref(false)
 ws.onmessage = (event) => {
     const data = JSON.parse(event.data)

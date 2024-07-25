@@ -64,7 +64,7 @@ const filePicked = (event: Event) => {
 const parseFile = async (data: string) => {
   statusMessage.value = "parsing and verifying netlist..."
   // https://api.stretchy.soggypancakes.tech/parse
-  const response: void | AxiosResponse = await axios.post("https://stretch.up.railway.app/parse", {
+  const response: void | AxiosResponse = await axios.post("http://localhost:8000/parse", {
     data
   }).catch((reason: AxiosError) => {
     console.log(reason)
