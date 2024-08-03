@@ -68,3 +68,39 @@ export interface Footprint {
   paths: [number, number][][][];
   pins: number[][];
 }
+
+export interface ConnectionNode {
+  ref: string;
+  num: number;
+}
+
+export interface Connection {
+  a: ConnectionNode;
+  b: ConnectionNode;
+}
+
+export interface Schematic {
+  layers: Map<string, Layer>;
+  connections: Connection[];
+}
+
+export interface Layer {
+  ref: string;
+  modules: Map<string, Layer>;
+  connections: Connection[];
+}
+
+export interface Module {
+  ref: string;
+  components: Map<string, Component>;
+  connections: Connection[];
+  radius: number;
+  pos: Vector;
+}
+
+export interface Component {
+  ref: string;
+  pins: number;
+  is_pad: boolean;
+  pos: Vector;
+}

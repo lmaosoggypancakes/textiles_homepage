@@ -6,51 +6,13 @@
 -->
 <template>
   <main class="h-full flex flex-col justify-center items-center relative">
-    <div
-      class="absolute left-0 w-1/4 h-full bg-surface transition-all rounded-bl-md z-10 flex flex-col"
-    >
-      <div class="px-12 py-8 text-text grow">
-        <p class="text-2xl font-bold">Configuration</p>
-        <span>Stretchification</span>
-        <input
-          type="range"
-          min="1"
-          max="100"
-          value="2"
-          class="w-full"
-          v-model="stretchification"
-        />
-
-        <span>y/w Ratio</span>
-        <input
-          type="range"
-          min="1"
-          max="30"
-          value="11"
-          class="w-full"
-          v-model="stretchDepth"
-        />
-
-        <span>Time</span>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value="0"
-          class="w-full"
-          v-model="time"
-        />
-
-        <div class="absolute bottom-2 space-y-2">
-          <Button @click="resetConstraints">Clear Constraints</Button>
-          <Button
-            class="bg-rose hover:bg-rose/80 active:bg-rose/70"
-            @click="enterBreakoutMode"
-            >Create Breakouts</Button
-          >
-        </div>
-      </div>
-    </div>
+    <Sider
+      @setStretchification="(s: number) => {stretchification = s;}"
+      @setStretchDepth="(d: number) => {stretchDepth = d;}"
+      @setTime="(t: number) => {time = t;}"
+      @resetConstraints="resetConstraints"
+      @enterBreakoutMode="enterBreakoutMode"
+    />
     <div
       class="h-full flex flex-col justify-center items-center mx-auto relative w-full"
     >
@@ -185,6 +147,7 @@ import {
   type Constraint,
   type Breakout,
   type Footprint,
+  type Schematic,
 } from "../../types";
 import { centroid, isIn } from "@/../util";
 
@@ -195,7 +158,6 @@ img.src = svg;
 const selectedLayer = ref(0);
 
 const canvas = ref<HTMLCanvasElement | null>(null);
-const showSidebar = ref(true);
 const message = ref("");
 const isClicked = ref(false);
 const route = useRoute();
@@ -221,9 +183,15 @@ const drawY = ref();
 
 const stretchification = ref(1);
 const stretchDepth = ref(11);
+
 if (!route.query.netlist) {
   router.push("/");
 }
+
+const schematic = ref<Schematic>({
+  layers: new Map(),
+  connections: [],
+});
 
 const paths = ref<[number, number][][]>([]);
 const showBreakouts = ref(false);
@@ -498,6 +466,7 @@ ws.onmessage = (event) => {
     Object.keys(data.footprints).forEach((key) => {
       footprints.value.set(key, data.footprints[key]);
     });
+    console.log(data);
   }
   if (data.label == "paths") {
     clearCavnas();
