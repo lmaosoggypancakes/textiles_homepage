@@ -147,7 +147,9 @@ import {
   type Constraint,
   type Breakout,
   type Footprint,
-  type Schematic,
+  type Circuit,
+  type Layer,
+  type Module,
 } from "../../types";
 import { centroid, isIn } from "@/../util";
 
@@ -188,10 +190,7 @@ if (!route.query.netlist) {
   router.push("/");
 }
 
-const schematic = ref<Schematic>({
-  layers: new Map(),
-  connections: [],
-});
+const circuit = ref<Circuit | null>(null);
 
 const paths = ref<[number, number][][]>([]);
 const showBreakouts = ref(false);
@@ -286,6 +285,138 @@ function renderGraph(
   });
 }
 
+function renderCircuit() {
+  if (!canvas.value) return;
+
+  const ctx = canvas.value?.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
+
+  if (!circuit.value) {
+    return;
+  }
+
+  Object.keys(circuit.value.layers).forEach((layerRef) => {
+    const layer = circuit.value?.layers[layerRef];
+    if (!layer) {
+      return;
+    }
+    renderLayer(layer, ctx);
+  });
+}
+
+function renderLayer(layer: Layer, ctx: CanvasRenderingContext2D) {
+  Object.keys(layer.modules).forEach((modRef) => {
+    const module = layer.modules[modRef];
+    if (!module) {
+      return;
+    }
+    renderModule(module, ctx);
+  });
+  layer.connections.forEach((conn) => {
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
+    ctx.beginPath();
+    ctx.moveTo(conn.a.pos.x, conn.a.pos.y);
+    ctx.lineTo(conn.b.pos.x, conn.b.pos.y);
+    ctx.stroke();
+  });
+}
+
+function renderModule(module: Module, ctx: CanvasRenderingContext2D) {
+  ctx.beginPath();
+  ctx.arc(module.pos.x, module.pos.y, module.radius, 0, 2 * Math.PI);
+  ctx.fillStyle = "#431";
+  ctx.fill();
+  Object.keys(module.components).forEach((cRef) => {
+    const component = module.components[cRef];
+    if (!component) {
+      return;
+    }
+    const base_x = module.pos.x + component.pos.x;
+    const base_y = module.pos.y + component.pos.y;
+    if (component.ref !== "") {
+      const footprint = circuit.value?.footprints[component.ref];
+      if (!footprint) {
+        if (component.is_pad) {
+          const pad_footprint = circuit.value?.footprints["pad"];
+          if (!pad_footprint) {
+            ctx.beginPath();
+            ctx.arc(component.pos.x, component.pos.y, 1, 0, 2 * Math.PI);
+            ctx.stroke();
+          } else {
+            renderFootprint(pad_footprint, base_x, base_y, ctx);
+          }
+        } else {
+          ctx.beginPath();
+          ctx.arc(component.pos.x, component.pos.y, 20, 0, 2 * Math.PI);
+          ctx.stroke();
+        }
+      } else {
+        renderFootprint(footprint, base_x, base_y, ctx);
+      }
+    }
+  });
+  module.connections.forEach((connection) => {
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
+    ctx.beginPath();
+    ctx.moveTo(
+      module.pos.x + connection.a.pos.x,
+      module.pos.y + connection.a.pos.y
+    );
+    ctx.lineTo(
+      module.pos.x + connection.b.pos.x,
+      module.pos.y + connection.b.pos.y
+    );
+    ctx.stroke();
+  });
+}
+
+function renderFootprint(
+  footprint: Footprint,
+  base_x: number,
+  base_y: number,
+  ctx: CanvasRenderingContext2D
+) {
+  const fcrtyd_paths = footprint.paths[0];
+  const silks_paths = footprint.paths[1];
+  const pad_paths = footprint.paths[2];
+  console.log(base_x, base_y);
+  if (fcrtyd_paths) {
+    fcrtyd_paths.forEach((path) => {
+      ctx.beginPath();
+      ctx.moveTo(base_x + path[0][0], base_y + path[0][1]);
+      ctx.lineTo(base_x + path[1][0], base_y + path[1][1]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#aaaf";
+      ctx.stroke();
+    });
+  }
+  if (silks_paths) {
+    silks_paths.forEach((path) => {
+      ctx.beginPath();
+      ctx.moveTo(base_x + path[0][0], base_y + path[0][1]);
+      ctx.lineTo(base_x + path[1][0], base_y + path[1][1]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#258f";
+      ctx.stroke();
+    });
+  }
+  if (pad_paths) {
+    ctx.beginPath();
+    ctx.moveTo(base_x + pad_paths[0][0][0], base_y + pad_paths[0][0][1]);
+    console.log(base_x + pad_paths[0][0][0], base_y + pad_paths[0][0][1]);
+    pad_paths.forEach((path) => {
+      ctx.lineTo(base_x + path[1][0], base_y + path[1][1]);
+    });
+    ctx.closePath();
+    ctx.lineWidth = 2;
+    ctx.fillStyle = "#ba2f";
+    ctx.fill();
+  }
+}
+
 const handleDrawStart = (event: MouseEvent) => {
   if (enableDrawConstraint.value) {
     paths.value.push([]);
@@ -362,7 +493,8 @@ const handleDrag = (event: MouseEvent) => {
   });
 
   // clearCavnas()
-  renderGraph();
+  // renderGraph();
+  renderCircuit();
 };
 
 const handleClick = (event: MouseEvent) => {
@@ -383,7 +515,8 @@ const handleClick = (event: MouseEvent) => {
       }
     }
   });
-  renderGraph();
+  // renderGraph();
+  renderCircuit();
   if (!flag) highlightedNode.value = null;
 };
 const clearCavnas = () => {
@@ -431,7 +564,8 @@ const leaveBreakoutMode = () => {
     node.color = "#ebbcba";
   });
   inBreakoutMode.value = false;
-  renderGraph();
+  // renderGraph();
+  renderCircuit();
 };
 const getSVG = () => {
   ws.send(
@@ -463,10 +597,8 @@ ws.onmessage = (event) => {
   console.log(data.label);
   // console.log(`[${data.label}] ${data.message || data.nodes}`)
   if (data.label == "graph") {
-    Object.keys(data.footprints).forEach((key) => {
-      footprints.value.set(key, data.footprints[key]);
-    });
-    console.log(data);
+    circuit.value = data.circuit;
+    renderCircuit();
   }
   if (data.label == "paths") {
     clearCavnas();
@@ -479,7 +611,8 @@ ws.onmessage = (event) => {
     }
     console.log(data.points);
     points.value = data.points;
-    renderGraph();
+    // renderGraph();
+    renderCircuit();
   }
 
   if (data.label == "svg") {

@@ -64,43 +64,56 @@ export interface BreakoutConnection {
   ref: string;
 }
 
+export interface Position {
+  x: number;
+  y: number;
+}
+
 export interface Footprint {
   paths: [number, number][][][];
   pins: number[][];
+  width: number;
+  height: number;
 }
 
 export interface ConnectionNode {
   ref: string;
-  num: number;
+  pin: number | string;
+  pos: Position;
 }
 
-export interface Connection {
+export interface Trace {
   a: ConnectionNode;
   b: ConnectionNode;
-}
-
-export interface Schematic {
-  layers: Map<string, Layer>;
-  connections: Connection[];
-}
-
-export interface Layer {
-  ref: string;
-  modules: Map<string, Layer>;
-  connections: Connection[];
-}
-
-export interface Module {
-  ref: string;
-  components: Map<string, Component>;
-  connections: Connection[];
-  radius: number;
-  pos: Vector;
+  points: Position[];
 }
 
 export interface Component {
   ref: string;
+  name: string;
   pins: number;
-  is_pad: boolean;
   pos: Vector;
+  is_pad: boolean;
+}
+
+export interface Module {
+  ref: string;
+  components: { [x: string]: Component };
+  connections: Trace[];
+  pads: Component[];
+  radius: number;
+  pos: Vector;
+}
+
+export interface Layer {
+  ref: string;
+  modules: { [x: string]: Module };
+  connections: Trace[];
+  vias: Module[];
+}
+
+export interface Circuit {
+  layers: { [x: string]: Layer };
+  vias: Trace[];
+  footprints: { [x: string]: Footprint };
 }
