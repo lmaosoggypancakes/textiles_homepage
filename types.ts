@@ -98,6 +98,8 @@ export interface Component {
   pins: number;
   pos: Position;
   is_pad: boolean;
+  width: number;
+  height: number;
 }
 
 export interface Module {

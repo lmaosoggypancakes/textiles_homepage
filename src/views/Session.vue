@@ -148,6 +148,18 @@
         : null
     "
   />
+  <ComponentMenu
+    :pos="selectedComponentPos"
+    :componentRef="selectedComponent ?? ''"
+    @move="moveComponentHandler"
+    @rotate="rotateHandler"
+    v-if="
+      showComponentMenu
+        ? circuit?.layers[selectedLayer].modules[selectedModule ?? '']
+            .components[selectedComponent ?? ''] ?? ''
+        : null
+    "
+  />
   <div
     class="absolute p-1 m-1 hover:cursor-pointer hover:bg-[#3e3843] rounded-xl"
     :style="{
@@ -175,17 +187,29 @@ import { isIn } from "@/../util";
 
 import svg from "@/assets/module.svg";
 import { _renderCircuit, _renderLayer, _renderModule } from "@/features/render";
-import { getModuleClicked, moveModule } from "@/features/handleUser";
+import {
+  getComponentClicked,
+  getModuleClicked,
+  moveComponent,
+  moveModule,
+} from "@/features/handleUser";
 import ModuleMenu from "@/components/ModuleMenu.vue";
 import { ArrowsPointingInIcon } from "@heroicons/vue/24/outline";
+import ComponentMenu from "@/components/ComponentMenu.vue";
 const img = new Image();
 img.src = svg;
 
 const selectedLayer = ref("");
+
 const selectedModule = ref<string | null>(null);
 const selectedModulePos = ref<Position>({ x: 0.0, y: 0.0 });
 const highlightedModule = ref<string | null>(null);
 const showModuleMenu = ref<boolean>(false);
+
+const selectedComponent = ref<string | null>(null);
+const selectedComponentPos = ref<Position>({ x: 0.0, y: 0.0 });
+const highlightedComponent = ref<string | null>(null);
+const showComponentMenu = ref<boolean>(false);
 
 const canvasMode = ref<
   "view_layer" | "view_module" | "move_module" | "move_component"
@@ -287,6 +311,8 @@ function renderModule() {
     circuit.value.layers[selectedLayer.value].modules[
       selectedModule.value ?? ""
     ],
+    selectedComponent.value,
+    highlightedComponent.value,
     circuit.value,
     ctx,
     false,
@@ -315,6 +341,17 @@ function mergeModulesHandler() {}
 function viewLayerHandler() {
   canvasMode.value = "view_layer";
   showModuleMenu.value = false;
+  renderView();
+}
+
+function moveComponentHandler() {
+  canvasMode.value = "move_component";
+  showComponentMenu.value = false;
+  renderView();
+}
+
+function rotateHandler() {
+  canvasMode.value = "view_module";
   renderView();
 }
 
@@ -376,6 +413,7 @@ const handleDrag = (event: MouseEvent) => {
       paths.value[currentPathIndex].push([drawX.value, drawY.value]);
     }
   }
+  console.log(canvasMode.value);
   switch (canvasMode.value) {
     case "view_layer": {
       const moduleRef = getModuleClicked(
@@ -392,6 +430,24 @@ const handleDrag = (event: MouseEvent) => {
       }
       break;
     }
+    case "view_module": {
+      const componentRef = getComponentClicked(
+        event.offsetX,
+        event.offsetY,
+        circuit.value?.layers[selectedLayer.value].modules[
+          selectedModule.value ?? ""
+        ] ?? null,
+        true
+      );
+      if (componentRef) {
+        highlightedComponent.value = componentRef;
+        document.body.style.cursor = "pointer";
+      } else {
+        highlightedComponent.value = null;
+        document.body.style.cursor = "auto";
+      }
+      break;
+    }
     case "move_module": {
       if (!circuit.value) {
         return null;
@@ -399,28 +455,34 @@ const handleDrag = (event: MouseEvent) => {
       if (!selectedModule.value) {
         return null;
       }
-      const module =
-        circuit.value.layers[selectedLayer.value].modules[selectedModule.value];
-      if (
-        Math.abs(module.pos.x - event.offsetX) > 20 &&
-        Math.abs(module.pos.y - event.offsetY) > 20
-      ) {
-        circuit.value = moveModule(
-          event.offsetX - module.pos.x,
-          event.offsetY - module.pos.y,
-          selectedModule.value,
-          selectedLayer.value,
-          circuit.value
-        );
-      }
       circuit.value = moveModule(
-        event.movementX,
-        event.movementY,
+        event.offsetX,
+        event.offsetY,
         selectedModule.value,
         selectedLayer.value,
         circuit.value
       );
       break;
+    }
+    case "move_component": {
+      if (!circuit.value) {
+        return null;
+      }
+      if (!selectedModule.value) {
+        return null;
+      }
+      if (!selectedComponent.value) {
+        return null;
+      }
+
+      circuit.value = moveComponent(
+        event.offsetX,
+        event.offsetY,
+        selectedComponent.value,
+        selectedModule.value,
+        selectedLayer.value,
+        circuit.value
+      );
     }
   }
   renderView();
@@ -466,10 +528,58 @@ const handleClick = (event: MouseEvent) => {
       }
       break;
     }
+    case "view_module": {
+      const componentRef = getComponentClicked(
+        event.offsetX,
+        event.offsetY,
+        circuit.value?.layers[selectedLayer.value].modules[
+          selectedModule.value ?? ""
+        ] ?? null,
+        true
+      );
+      if (componentRef) {
+        if (selectedComponent.value === componentRef) {
+          selectedComponent.value = null;
+        } else {
+          const component =
+            circuit.value?.layers[selectedLayer.value].modules[
+              selectedModule.value ?? ""
+            ].components[componentRef ?? ""];
+          if (!component) {
+            showComponentMenu.value = false;
+            return null;
+          }
+          selectedComponent.value = componentRef;
+          selectedComponentPos.value = {
+            x:
+              canvas.value.getBoundingClientRect().left +
+              250 +
+              5.0 * component.pos.x +
+              5.0 * (component.width / 2) * 1.5,
+            y:
+              canvas.value.getBoundingClientRect().top +
+              250 +
+              5.0 * component.pos.y -
+              5.0 * (component.height / 2),
+          };
+          showComponentMenu.value = true;
+        }
+      } else {
+        selectedComponent.value = null;
+        highlightedComponent.value = null;
+      }
+      break;
+    }
     case "move_module": {
       canvasMode.value = "view_layer";
       document.body.style.cursor = "auto";
       selectedModule.value = null;
+      break;
+    }
+    case "move_component": {
+      canvasMode.value = "view_module";
+      document.body.style.cursor = "auto";
+      selectedComponent.value = null;
       break;
     }
   }

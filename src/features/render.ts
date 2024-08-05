@@ -27,6 +27,8 @@ export function _renderLayer(
     }
     _renderModule(
       module,
+      null,
+      null,
       circuit,
       ctx,
       selectedModule === modRef,
@@ -46,6 +48,8 @@ export function _renderLayer(
 
 export function _renderModule(
   module: Module,
+  selectedComponent: string | null,
+  highlightedComponent: string | null,
   circuit: Circuit,
   ctx: CanvasRenderingContext2D,
   selected: boolean,
@@ -59,20 +63,21 @@ export function _renderModule(
   ctx.arc(module_x, module_y, module_radius, 0, 2 * Math.PI);
   ctx.fillStyle = "#431";
   ctx.fill();
-  if (selected) {
-    ctx.beginPath();
-    ctx.arc(module_x, module_y, module_radius, 0, 2 * Math.PI);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "#ddd";
-    ctx.stroke();
-  }
   if (highlighted) {
     ctx.beginPath();
     ctx.arc(module_x, module_y, module_radius + 0.5, 0, 2 * Math.PI);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = "#888";
-    ctx.stroke();
+    ctx.fillStyle = "#542";
+    ctx.fill();
   }
+  if (selected) {
+    ctx.beginPath();
+    ctx.arc(module_x, module_y, module_radius, 0, 2 * Math.PI);
+    ctx.lineWidth = 1;
+    ctx.fillStyle = "#653";
+    ctx.fill();
+  }
+
   Object.keys(module.components).forEach((cRef) => {
     const component = module.components[cRef];
     if (!component) {
@@ -92,7 +97,15 @@ export function _renderModule(
             ctx.arc(component_x, component_y, 1, 0, 2 * Math.PI);
             ctx.stroke();
           } else {
-            renderFootprint(pad_footprint, base_x, base_y, ctx, zoomed_in);
+            renderFootprint(
+              pad_footprint,
+              base_x,
+              base_y,
+              ctx,
+              zoomed_in,
+              highlightedComponent === component.ref,
+              selectedComponent === component.ref
+            );
           }
         } else {
           ctx.beginPath();
@@ -100,7 +113,15 @@ export function _renderModule(
           ctx.stroke();
         }
       } else {
-        renderFootprint(footprint, base_x, base_y, ctx, zoomed_in);
+        renderFootprint(
+          footprint,
+          base_x,
+          base_y,
+          ctx,
+          zoomed_in,
+          highlightedComponent === component.ref,
+          selectedComponent === component.ref
+        );
       }
     }
   });
@@ -126,7 +147,9 @@ function renderFootprint(
   base_x: number,
   base_y: number,
   ctx: CanvasRenderingContext2D,
-  zoomed_in: boolean
+  zoomed_in: boolean,
+  highlightedComponent: boolean,
+  selectedComponent: boolean
 ) {
   const scale = zoomed_in ? 5 : 1;
   const fcrtyrd_shapes = footprint.paths[0];
@@ -140,6 +163,12 @@ function renderFootprint(
         ctx.lineTo(base_x + scale * path[1][0], base_y + scale * path[1][1]);
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#aaaf";
+        if (highlightedComponent) {
+          ctx.strokeStyle = "#bbbf";
+        }
+        if (selectedComponent) {
+          ctx.strokeStyle = "#cccf";
+        }
         ctx.stroke();
       });
     });
@@ -152,6 +181,12 @@ function renderFootprint(
         ctx.lineTo(base_x + scale * path[1][0], base_y + scale * path[1][1]);
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#258f";
+        if (highlightedComponent) {
+          ctx.strokeStyle = "#369f";
+        }
+        if (selectedComponent) {
+          ctx.strokeStyle = "#47af";
+        }
         ctx.stroke();
       });
     });
@@ -169,6 +204,12 @@ function renderFootprint(
       ctx.closePath();
       ctx.lineWidth = 2;
       ctx.fillStyle = "#ba2f";
+      if (highlightedComponent) {
+        ctx.fillStyle = "#cb3f";
+      }
+      if (selectedComponent) {
+        ctx.fillStyle = "#fe6f";
+      }
       ctx.fill();
     });
   }
