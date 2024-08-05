@@ -20,12 +20,12 @@
         <a
           role="tab"
           class="tab"
-          v-for="(_, idx) in Array(10)"
+          v-for="layer in Object.keys(circuit?.layers ?? {})"
           :class="
-            idx == selectedLayer && 'tab-active [--tab-bg:#ebbcba] text-base'
+            layer == selectedLayer && 'tab-active [--tab-bg:#ebbcba] text-base'
           "
-          @click="selectedLayer = idx"
-          >Layer {{ idx }}</a
+          @click="selectedLayer = layer"
+          >{{ layer }}</a
         >
       </div>
       <span
@@ -52,7 +52,7 @@
       <canvas
         width="500"
         height="500"
-        class="border-2 border-rose bg-rose/10 rounded-md z-20"
+        class="border-2 border-rose bg-rose/10 rounded-md z-1"
         ref="canvas"
         @mousemove="handleDrag"
         @mousedown="handleDrawStart"
@@ -135,29 +135,61 @@
       </div>
     </div>
   </main>
+  <ModuleMenu
+    :pos="selectedModulePos"
+    :module_ref="selectedModule ?? ''"
+    @editModule="editModuleHandler"
+    @move="moveModuleHandler"
+    @moveLayer="moveLayerHandler"
+    @mergeModules="mergeModulesHandler"
+    v-if="
+      showModuleMenu
+        ? circuit?.layers[selectedLayer].modules[selectedModule ?? ''] ?? ''
+        : null
+    "
+  />
+  <div
+    class="absolute p-1 m-1 hover:cursor-pointer hover:bg-[#3e3843] rounded-xl"
+    :style="{
+      left: canvas?.getBoundingClientRect().left + 'px',
+      top: canvas?.getBoundingClientRect().top + 'px',
+    }"
+    @click="viewLayerHandler"
+    v-if="canvasMode === 'view_module' ? true : null"
+  >
+    <ArrowsPointingInIcon class="w-8 h-8 text-white" />
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, render, watch } from "vue";
+import { ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { ChevronRightIcon, ChevronLeftIcon } from "@heroicons/vue/24/outline";
 import {
-  type PhysicalConnection,
   type PhysicalNode,
   type Constraint,
   type Breakout,
-  type Footprint,
   type Circuit,
-  type Layer,
-  type Module,
+  type Position,
 } from "../../types";
-import { centroid, isIn } from "@/../util";
+import { isIn } from "@/../util";
 
 import svg from "@/assets/module.svg";
+import { _renderCircuit, _renderLayer, _renderModule } from "@/features/render";
+import { getModuleClicked, moveModule } from "@/features/handleUser";
+import ModuleMenu from "@/components/ModuleMenu.vue";
+import { ArrowsPointingInIcon } from "@heroicons/vue/24/outline";
 const img = new Image();
 img.src = svg;
 
-const selectedLayer = ref(0);
+const selectedLayer = ref("");
+const selectedModule = ref<string | null>(null);
+const selectedModulePos = ref<Position>({ x: 0.0, y: 0.0 });
+const highlightedModule = ref<string | null>(null);
+const showModuleMenu = ref<boolean>(false);
+
+const canvasMode = ref<
+  "view_layer" | "view_module" | "move_module" | "move_component"
+>("view_layer");
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 const message = ref("");
@@ -169,7 +201,6 @@ const nodes = ref<PhysicalNode[]>([]);
 const nodes_original = ref<PhysicalNode[]>([]);
 const points = ref([]);
 const constraints = ref<Constraint[]>([]);
-const footprints = ref<Map<string, Footprint>>(new Map());
 
 const enableDrawConstraint = ref(false);
 const initDrawX = ref();
@@ -201,220 +232,90 @@ const netlist = JSON.parse(route.query.netlist as string);
 const prettyVector = (v: { angle: number; mag: number }) => {
   return `(${v.mag.toFixed(2)}, ${v.angle.toFixed(2)})`;
 };
-function renderGraph(
-  nodeList: PhysicalNode[] = nodes.value,
-  pointList: [number, number][][] = points.value
-) {
-  // clearCavnas()
-  if (!canvas.value) return;
 
+function getCtx(): CanvasRenderingContext2D | null {
+  if (!canvas.value) {
+    alert("no canvas");
+    return null;
+  }
   const ctx = canvas.value?.getContext("2d");
-  if (!ctx) return;
-  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
-  ctx.fillStyle = "#685A80";
-  paths.value.forEach((path) => {
-    ctx.beginPath();
-    ctx.strokeStyle = "#c4a7e7";
-    ctx.lineWidth = 1;
-    ctx.moveTo(path[0][0], path[0][1]);
-    path.forEach((point) => {
-      ctx.lineTo(point[0], point[1]);
-    });
-    ctx.fill();
-    ctx.stroke();
-  });
-  ctx.fillStyle = "#ebbcba";
-  ctx.lineWidth = 4;
-  nodeList.forEach((node) => {
-    ctx.strokeStyle = ctx.fillStyle = node.color;
-    if (node["ref"] !== "") {
-      const footprint = footprints.value.get(node.ref);
-      if (!footprint) {
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, 20, 0, 2 * Math.PI);
-        ctx.stroke();
-      } else {
-        const fcrtyd_paths = footprint.paths[0];
-        const silks_paths = footprint.paths[1];
-        fcrtyd_paths.forEach((path) => {
-          ctx.beginPath();
-          ctx.moveTo(node.x + path[0][0], node.y + path[0][1]);
-          ctx.lineTo(node.x + path[1][0], node.y + path[1][1]);
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "#aaaf";
-          ctx.stroke();
-        });
-        silks_paths.forEach((path) => {
-          ctx.beginPath();
-          ctx.moveTo(node.x + path[0][0], node.y + path[0][1]);
-          ctx.lineTo(node.x + path[1][0], node.y + path[1][1]);
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "#258f";
-          ctx.stroke();
-        });
-      }
-    } else {
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, 20, 0, 2 * Math.PI);
-      ctx.stroke();
-    }
-    ctx.lineWidth = 4;
-    ctx.font = "18px serif";
-    ctx.fillText(node.ref, node.x - 10, node.y - 15);
-  });
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
-  pointList.forEach((conn) => {
-    ctx.beginPath();
-    ctx.moveTo(conn[0][0], conn[0][1]);
-    conn.forEach((point: any) => {
-      // fix pls
-      ctx.lineTo(point[1], point[2]);
-    });
-    ctx.stroke();
-  });
-
-  ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
-  breakouts.value.forEach((b) => {
-    const [x, y] = centroid(b.nodes);
-    ctx.drawImage(img, x - 75, y - 125);
-    // ctx.fillRect(x-25,y-25,50,50);
-    // ctx.font = "18px serif"
-    // ctx.fillStyle = "#191724"
-    // ctx.fillText(b.ref, x-10,y+5)
-  });
+  if (!ctx) {
+    alert("no ctx");
+    return null;
+  }
+  return ctx;
 }
 
-function renderCircuit() {
-  if (!canvas.value) return;
+function renderView() {
+  if (canvasMode.value === "view_layer" || canvasMode.value === "move_module") {
+    renderLayer();
+  } else if (
+    canvasMode.value === "view_module" ||
+    canvasMode.value === "move_component"
+  ) {
+    renderModule();
+  }
+}
 
-  const ctx = canvas.value?.getContext("2d");
+function renderLayer() {
+  const ctx = getCtx();
   if (!ctx) return;
-  ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
+  clearCanvas();
+
+  if (!circuit.value) {
+    return;
+  }
+  _renderLayer(
+    circuit.value.layers[selectedLayer.value],
+    selectedModule.value,
+    highlightedModule.value,
+    circuit.value,
+    ctx
+  );
+}
+
+function renderModule() {
+  const ctx = getCtx();
+  if (!ctx) return;
+  clearCanvas();
 
   if (!circuit.value) {
     return;
   }
 
-  Object.keys(circuit.value.layers).forEach((layerRef) => {
-    const layer = circuit.value?.layers[layerRef];
-    if (!layer) {
-      return;
-    }
-    renderLayer(layer, ctx);
-  });
+  _renderModule(
+    circuit.value.layers[selectedLayer.value].modules[
+      selectedModule.value ?? ""
+    ],
+    circuit.value,
+    ctx,
+    false,
+    false,
+    true
+  );
 }
 
-function renderLayer(layer: Layer, ctx: CanvasRenderingContext2D) {
-  Object.keys(layer.modules).forEach((modRef) => {
-    const module = layer.modules[modRef];
-    if (!module) {
-      return;
-    }
-    renderModule(module, ctx);
-  });
-  layer.connections.forEach((conn) => {
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
-    ctx.beginPath();
-    ctx.moveTo(conn.a.pos.x, conn.a.pos.y);
-    ctx.lineTo(conn.b.pos.x, conn.b.pos.y);
-    ctx.stroke();
-  });
+function editModuleHandler() {
+  canvasMode.value = "view_module";
+  showModuleMenu.value = false;
+  renderModule();
 }
 
-function renderModule(module: Module, ctx: CanvasRenderingContext2D) {
-  ctx.beginPath();
-  ctx.arc(module.pos.x, module.pos.y, module.radius, 0, 2 * Math.PI);
-  ctx.fillStyle = "#431";
-  ctx.fill();
-  Object.keys(module.components).forEach((cRef) => {
-    const component = module.components[cRef];
-    if (!component) {
-      return;
-    }
-    const base_x = module.pos.x + component.pos.x;
-    const base_y = module.pos.y + component.pos.y;
-    if (component.ref !== "") {
-      const footprint = circuit.value?.footprints[component.ref];
-      if (!footprint) {
-        if (component.is_pad) {
-          const pad_footprint = circuit.value?.footprints["pad"];
-          if (!pad_footprint) {
-            ctx.beginPath();
-            ctx.arc(component.pos.x, component.pos.y, 1, 0, 2 * Math.PI);
-            ctx.stroke();
-          } else {
-            renderFootprint(pad_footprint, base_x, base_y, ctx);
-          }
-        } else {
-          ctx.beginPath();
-          ctx.arc(component.pos.x, component.pos.y, 20, 0, 2 * Math.PI);
-          ctx.stroke();
-        }
-      } else {
-        renderFootprint(footprint, base_x, base_y, ctx);
-      }
-    }
-  });
-  module.connections.forEach((connection) => {
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
-    ctx.beginPath();
-    ctx.moveTo(
-      module.pos.x + connection.a.pos.x,
-      module.pos.y + connection.a.pos.y
-    );
-    ctx.lineTo(
-      module.pos.x + connection.b.pos.x,
-      module.pos.y + connection.b.pos.y
-    );
-    ctx.stroke();
-  });
+function moveModuleHandler() {
+  canvasMode.value = "move_module";
+  showModuleMenu.value = false;
+  document.body.style.cursor = "move";
+  renderLayer();
 }
 
-function renderFootprint(
-  footprint: Footprint,
-  base_x: number,
-  base_y: number,
-  ctx: CanvasRenderingContext2D
-) {
-  const fcrtyd_paths = footprint.paths[0];
-  const silks_paths = footprint.paths[1];
-  const pad_paths = footprint.paths[2];
-  console.log(base_x, base_y);
-  if (fcrtyd_paths) {
-    fcrtyd_paths.forEach((path) => {
-      ctx.beginPath();
-      ctx.moveTo(base_x + path[0][0], base_y + path[0][1]);
-      ctx.lineTo(base_x + path[1][0], base_y + path[1][1]);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#aaaf";
-      ctx.stroke();
-    });
-  }
-  if (silks_paths) {
-    silks_paths.forEach((path) => {
-      ctx.beginPath();
-      ctx.moveTo(base_x + path[0][0], base_y + path[0][1]);
-      ctx.lineTo(base_x + path[1][0], base_y + path[1][1]);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "#258f";
-      ctx.stroke();
-    });
-  }
-  if (pad_paths) {
-    ctx.beginPath();
-    ctx.moveTo(base_x + pad_paths[0][0][0], base_y + pad_paths[0][0][1]);
-    console.log(base_x + pad_paths[0][0][0], base_y + pad_paths[0][0][1]);
-    pad_paths.forEach((path) => {
-      ctx.lineTo(base_x + path[1][0], base_y + path[1][1]);
-    });
-    ctx.closePath();
-    ctx.lineWidth = 2;
-    ctx.fillStyle = "#ba2f";
-    ctx.fill();
-  }
+function moveLayerHandler() {}
+
+function mergeModulesHandler() {}
+
+function viewLayerHandler() {
+  canvasMode.value = "view_layer";
+  showModuleMenu.value = false;
+  renderView();
 }
 
 const handleDrawStart = (event: MouseEvent) => {
@@ -475,59 +376,124 @@ const handleDrag = (event: MouseEvent) => {
       paths.value[currentPathIndex].push([drawX.value, drawY.value]);
     }
   }
-  nodes.value.forEach((node) => {
-    if (
-      node.x - 28 <= event.offsetX &&
-      event.offsetX <= node.x + 28 &&
-      node.y - 28 <= event.offsetY &&
-      event.offsetY <= node.y + 28
-    ) {
-      if (inBreakoutMode.value) {
-        node.color = "#c4a7e7";
+  switch (canvasMode.value) {
+    case "view_layer": {
+      const moduleRef = getModuleClicked(
+        event.offsetX,
+        event.offsetY,
+        circuit.value?.layers[selectedLayer.value] ?? null
+      );
+      if (moduleRef) {
+        highlightedModule.value = moduleRef;
+        document.body.style.cursor = "pointer";
       } else {
-        node.color = "#9ccfd8";
+        highlightedModule.value = null;
+        document.body.style.cursor = "auto";
       }
-    } else {
-      node.color = inBreakoutMode.value ? node.color : "#ebbcba";
+      break;
     }
-  });
-
-  // clearCavnas()
-  // renderGraph();
-  renderCircuit();
+    case "move_module": {
+      if (!circuit.value) {
+        return null;
+      }
+      if (!selectedModule.value) {
+        return null;
+      }
+      const module =
+        circuit.value.layers[selectedLayer.value].modules[selectedModule.value];
+      if (
+        Math.abs(module.pos.x - event.offsetX) > 20 &&
+        Math.abs(module.pos.y - event.offsetY) > 20
+      ) {
+        circuit.value = moveModule(
+          event.offsetX - module.pos.x,
+          event.offsetY - module.pos.y,
+          selectedModule.value,
+          selectedLayer.value,
+          circuit.value
+        );
+      }
+      circuit.value = moveModule(
+        event.movementX,
+        event.movementY,
+        selectedModule.value,
+        selectedLayer.value,
+        circuit.value
+      );
+      break;
+    }
+  }
+  renderView();
 };
 
 const handleClick = (event: MouseEvent) => {
-  let flag = false;
-  nodes.value.forEach((node) => {
-    if (
-      node.x - 28 <= event.offsetX &&
-      event.offsetX <= node.x + 28 &&
-      node.y - 28 <= event.offsetY &&
-      event.offsetY <= node.y + 28
-    ) {
-      if (inBreakoutMode.value) {
-        node.color = "#c4a7e7";
-        nextBreakoutNodes.value.push(node);
+  if (!canvas.value) {
+    return null;
+  }
+  switch (canvasMode.value) {
+    case "view_layer": {
+      const moduleRef = getModuleClicked(
+        event.offsetX,
+        event.offsetY,
+        circuit.value?.layers[selectedLayer.value] ?? null
+      );
+      if (moduleRef) {
+        if (selectedModule.value === moduleRef) {
+          selectedModule.value = null;
+        } else {
+          const module =
+            circuit.value?.layers[selectedLayer.value].modules[moduleRef];
+          if (!module) {
+            showModuleMenu.value = false;
+            return null;
+          }
+          selectedModule.value = moduleRef;
+          selectedModulePos.value = {
+            x:
+              canvas.value.getBoundingClientRect().left +
+              module.pos.x +
+              module.radius * 1.5,
+            y:
+              canvas.value.getBoundingClientRect().top +
+              module.pos.y -
+              module.radius,
+          };
+          showModuleMenu.value = true;
+        }
       } else {
-        highlightedNode.value = node;
-        flag = true;
+        showModuleMenu.value = false;
+        selectedModule.value = null;
       }
+      break;
     }
-  });
-  // renderGraph();
-  renderCircuit();
-  if (!flag) highlightedNode.value = null;
+    case "move_module": {
+      canvasMode.value = "view_layer";
+      document.body.style.cursor = "auto";
+      selectedModule.value = null;
+      break;
+    }
+  }
+  renderView();
 };
-const clearCavnas = () => {
+
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (event.key === "Escape") {
+    canvasMode.value = "view_layer";
+    document.body.style.cursor = "auto";
+    selectedModule.value = null;
+    renderView();
+  }
+};
+
+const clearCanvas = () => {
   if (!canvas.value) {
     alert("no canvas");
-    return;
+    return null;
   }
   const ctx = canvas.value?.getContext("2d");
   if (!ctx) {
     alert("no ctx");
-    return;
+    return null;
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.value.width, canvas.value.height);
@@ -537,8 +503,9 @@ const clearCavnas = () => {
 const resetConstraints = () => {
   paths.value = [];
   currentPathIndex = -1;
-  clearCavnas();
+  clearCanvas();
   // renderGraph();
+  renderView();
 };
 
 const enterBreakoutMode = () => {
@@ -565,7 +532,7 @@ const leaveBreakoutMode = () => {
   });
   inBreakoutMode.value = false;
   // renderGraph();
-  renderCircuit();
+  renderView();
 };
 const getSVG = () => {
   ws.send(
@@ -598,10 +565,15 @@ ws.onmessage = (event) => {
   // console.log(`[${data.label}] ${data.message || data.nodes}`)
   if (data.label == "graph") {
     circuit.value = data.circuit;
-    renderCircuit();
+    const layer_refs = Object.keys(circuit.value?.layers ?? {});
+    document.addEventListener("keydown", handleKeyDown);
+    if (layer_refs && layer_refs.length > 0) {
+      selectedLayer.value = layer_refs[0];
+      renderView();
+    }
   }
   if (data.label == "paths") {
-    clearCavnas();
+    clearCanvas();
     nodes.value = data.nodes.map((node: PhysicalNode) => ({
       ...node,
       color: "#ebbcba",
@@ -612,7 +584,7 @@ ws.onmessage = (event) => {
     console.log(data.points);
     points.value = data.points;
     // renderGraph();
-    renderCircuit();
+    renderView();
   }
 
   if (data.label == "svg") {
@@ -649,7 +621,7 @@ ws.onopen = () => {
 };
 
 watch([stretchDepth, stretchification, time], (v) => {
-  // clearCavnas()
+  // clearCanvas()
   if (wsOpen.value) {
     console.log(v[0], v[1], v[2]);
     ws.send(

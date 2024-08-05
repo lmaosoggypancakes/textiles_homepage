@@ -69,8 +69,12 @@ export interface Position {
   y: number;
 }
 
+export interface Shape {
+  paths: [[number, number], [number, number]][];
+}
+
 export interface Footprint {
-  paths: [number, number][][][];
+  paths: Shape[][];
   pins: number[][];
   width: number;
   height: number;
@@ -92,7 +96,7 @@ export interface Component {
   ref: string;
   name: string;
   pins: number;
-  pos: Vector;
+  pos: Position;
   is_pad: boolean;
 }
 
@@ -102,7 +106,7 @@ export interface Module {
   connections: Trace[];
   pads: Component[];
   radius: number;
-  pos: Vector;
+  pos: Position;
 }
 
 export interface Layer {
