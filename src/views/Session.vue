@@ -259,7 +259,7 @@ const prettyVector = (v: { angle: number; mag: number }) => {
 
 function getCtx(): CanvasRenderingContext2D | null {
   if (!canvas.value) {
-    alert("no canvas");
+    // alert("no canvas");
     return null;
   }
   const ctx = canvas.value?.getContext("2d");
@@ -413,7 +413,6 @@ const handleDrag = (event: MouseEvent) => {
       paths.value[currentPathIndex].push([drawX.value, drawY.value]);
     }
   }
-  console.log(canvasMode.value);
   switch (canvasMode.value) {
     case "view_layer": {
       const moduleRef = getModuleClicked(
@@ -588,16 +587,97 @@ const handleClick = (event: MouseEvent) => {
 
 const handleKeyDown = (event: KeyboardEvent) => {
   if (event.key === "Escape") {
-    canvasMode.value = "view_layer";
-    document.body.style.cursor = "auto";
-    selectedModule.value = null;
-    renderView();
+    event.preventDefault();
+    switch (canvasMode.value) {
+      case "view_module": {
+        canvasMode.value = "view_layer";
+        document.body.style.cursor = "auto";
+        selectedModule.value = null;
+        break;
+      }
+      case "view_layer": {
+        if (showModuleMenu.value) {
+          showModuleMenu.value = false;
+          break;
+        } else if (selectedModule.value != null) {
+          selectedModule.value = null;
+          break;
+        }
+      }
+      case "move_component": {
+        if (!selectedModule.value) {
+          return;
+        }
+        if (!selectedComponent.value) {
+          return;
+        }
+        if (!circuit.value) {
+          return;
+        }
+        if (!canvas.value) {
+          return;
+        }
+        const component =
+          circuit.value?.layers[selectedLayer.value].modules[
+            selectedModule.value
+          ].components[selectedComponent.value];
+        if (!component) {
+          return;
+        }
+        circuit.value = moveComponent(
+          selectedComponentPos.value.x -
+            5.0 * (component.width / 2) * 1.5 -
+            canvas.value.getBoundingClientRect().left,
+          selectedComponentPos.value.y +
+            5.0 * (component.height / 2) -
+            canvas.value.getBoundingClientRect().top,
+          selectedComponent.value,
+          selectedModule.value,
+          selectedLayer.value,
+          circuit.value
+        );
+        canvasMode.value = "view_module";
+        break;
+      }
+      case "move_module": {
+        if (!selectedModule.value) {
+          return;
+        }
+        if (!circuit.value) {
+          return;
+        }
+        if (!canvas.value) {
+          return;
+        }
+        const module =
+          circuit.value?.layers[selectedLayer.value].modules[
+            selectedModule.value
+          ];
+        if (!module) {
+          return;
+        }
+        circuit.value = moveModule(
+          selectedModulePos.value.x -
+            module.radius * 1.5 -
+            canvas.value.getBoundingClientRect().left,
+          selectedModulePos.value.y +
+            module.radius -
+            canvas.value.getBoundingClientRect().top,
+          selectedModule.value,
+          selectedLayer.value,
+          circuit.value
+        );
+        canvasMode.value = "view_layer";
+        break;
+      }
+    }
   }
+  renderView();
 };
 
 const clearCanvas = () => {
   if (!canvas.value) {
-    alert("no canvas");
+    // alert("no canvas");
     return null;
   }
   const ctx = canvas.value?.getContext("2d");

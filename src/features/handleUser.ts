@@ -108,6 +108,69 @@ export function moveModule(
   return circuit;
 }
 
+function calculate360Angle(offset_x: number, offset_y: number): number {
+  var radians = Math.atan2(-offset_y, offset_x);
+  if (radians < 0) radians += 2 * Math.PI;
+  return (radians * 180) / Math.PI;
+}
+
+function snapPadPos(angle: number, radius: number): [number, number] {
+  if (0 <= angle && angle < 60) {
+    return [radius * Math.cos(Math.PI / 4), radius * Math.sin(Math.PI / 4)];
+  } else if (60 <= angle && angle < 90) {
+    return [
+      radius * Math.cos((Math.PI * 7) / 16),
+      radius * Math.sin((Math.PI * 7) / 16),
+    ];
+  } else if (90 <= angle && angle < 120) {
+    return [
+      radius * Math.cos((Math.PI * 9) / 16),
+      radius * Math.sin((Math.PI * 9) / 16),
+    ];
+  } else if (120 <= angle && angle < 180) {
+    return [
+      radius * Math.cos((Math.PI * 3) / 4),
+      radius * Math.sin((Math.PI * 3) / 4),
+    ];
+  } else if (180 <= angle && angle < 240) {
+    return [
+      radius * Math.cos((Math.PI * 5) / 4),
+      radius * Math.sin((Math.PI * 5) / 4),
+    ];
+  } else if (240 <= angle && angle < 270) {
+    return [
+      radius * Math.cos((Math.PI * 23) / 16),
+      radius * Math.sin((Math.PI * 23) / 16),
+    ];
+  } else if (270 <= angle && angle < 300) {
+    return [
+      radius * Math.cos((Math.PI * 25) / 16),
+      radius * Math.sin((Math.PI * 25) / 16),
+    ];
+  } else if (300 <= angle && angle < 360) {
+    return [
+      radius * Math.cos((Math.PI * 7) / 4),
+      radius * Math.sin((Math.PI * 7) / 4),
+    ];
+  }
+  return [0, 0];
+}
+
+function getComponentOffsetPos(
+  mouse_x: number,
+  mouse_y: number,
+  radius: number,
+  componentRef: string
+): [number, number] {
+  const offset_x = (mouse_x - 250) * 0.2;
+  const offset_y = (mouse_y - 250) * 0.2;
+  if (componentRef.startsWith("PAD")) {
+    const angle = 360 - calculate360Angle(offset_x, offset_y);
+    return snapPadPos(angle, radius);
+  }
+  return [offset_x, offset_y];
+}
+
 export function moveComponent(
   mouse_x: number,
   mouse_y: number,
@@ -122,8 +185,12 @@ export function moveComponent(
   );
   const component =
     circuit.layers[layer].modules[module].components[componentRef];
-  const offset_x = (mouse_x - 250) * 0.2;
-  const offset_y = (mouse_y - 250) * 0.2;
+  const [offset_x, offset_y] = getComponentOffsetPos(
+    mouse_x,
+    mouse_y,
+    circuit.layers[layer].modules[module].radius,
+    componentRef
+  );
   moduleConnections.forEach((conn) => {
     const new_conn = conn[1];
     const a_pin_diff_x = new_conn.a.pos.x - component.pos.x;

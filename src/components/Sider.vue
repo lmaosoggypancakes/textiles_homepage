@@ -6,7 +6,6 @@ const emit = defineEmits<{
   setStretchDepth: [depth: number];
   setTime: [time: number];
   resetConstraints: [];
-  enterBreakoutMode: [];
 }>();
 </script>
 
@@ -48,11 +47,6 @@ const emit = defineEmits<{
 
       <div class="absolute bottom-2 space-y-2">
         <Button @click="emit('resetConstraints')">Clear Constraints</Button>
-        <Button
-          class="bg-rose hover:bg-rose/80 active:bg-rose/70"
-          @click="emit('enterBreakoutMode')"
-          >Create Breakouts</Button
-        >
       </div>
     </div>
   </div>

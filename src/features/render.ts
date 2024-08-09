@@ -47,7 +47,7 @@ export function _renderLayer(
 }
 
 export function _renderModule(
-  module: Module,
+  module: Module | null,
   selectedComponent: string | null,
   highlightedComponent: string | null,
   circuit: Circuit,
@@ -56,6 +56,9 @@ export function _renderModule(
   highlighted: boolean,
   zoomed_in: boolean
 ) {
+  if (!module) {
+    return null;
+  }
   const module_x = zoomed_in ? 250 : module.pos.x;
   const module_y = zoomed_in ? 250 : module.pos.y;
   const module_radius = zoomed_in ? module.radius * 5 : module.radius;
