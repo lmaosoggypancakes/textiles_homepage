@@ -1,9 +1,3 @@
-<!--
-    TODO:
-    - allow movement of nodes beyond initial position
-        - afterwards, any generations must be 'locked in'
-    -
--->
 <template>
   <main class="h-full flex flex-col justify-center items-center relative">
     <Sider
@@ -68,48 +62,6 @@
           >Processing</Button
         >
       </div>
-      <ul
-        class="absolute top-4 right-4 bg-surface rounded-md w-96 text-text px-4 py-6"
-        v-if="highlightedNode"
-      >
-        <span class="font-bold">Node Properties</span>
-        <div class="border-b-2 border-highlight my-2"></div>
-        <li>
-          <span>Ref</span>
-          <span class="float-right">{{ highlightedNode.ref }}</span>
-        </li>
-        <li>
-          <span>X</span>
-          <span class="float-right">{{ highlightedNode.x.toFixed(2) }}</span>
-        </li>
-        <li>
-          <span>Y</span>
-          <span class="float-right">{{ highlightedNode.y.toFixed(2) }}</span>
-        </li>
-        <li>
-          <span>Velocity</span>
-          <span class="float-right">{{
-            prettyVector(highlightedNode.vel)
-          }}</span>
-        </li>
-        <li>
-          <span>Acceleration</span>
-          <span class="float-right">{{
-            prettyVector(highlightedNode.acc)
-          }}</span>
-        </li>
-        <li>
-          <span>Pins</span>
-          <!-- <span class="float-right">{{  highlightedNode }}</span> -->
-        </li>
-        <li>
-          <span>Name</span>
-          <!-- <span class="float-right">{{  highlightedNode }}</span> -->
-        </li>
-        <Button class="mt-2" @click="enableDrawConstraint = true"
-          >Add Constraint</Button
-        >
-      </ul>
       <div
         class="absolute top-96 right-4 bg-surface rounded-md w-96 text-text px-4 py-6"
         v-if="breakouts.length > 0"
@@ -196,6 +148,9 @@ import {
 import ModuleMenu from "@/components/ModuleMenu.vue";
 import { ArrowsPointingInIcon } from "@heroicons/vue/24/outline";
 import ComponentMenu from "@/components/ComponentMenu.vue";
+import { useWebSocket } from "@/stores/websocket";
+import { storeToRefs } from "pinia";
+import { useNetlistStore } from "@/stores/netlist";
 const img = new Image();
 img.src = svg;
 
@@ -218,12 +173,11 @@ const canvasMode = ref<
 const canvas = ref<HTMLCanvasElement | null>(null);
 const message = ref("");
 const isClicked = ref(false);
-const route = useRoute();
 const router = useRouter();
 
 const nodes = ref<PhysicalNode[]>([]);
 const nodes_original = ref<PhysicalNode[]>([]);
-const points = ref([]);
+const points = ref<any[]>([]);
 const constraints = ref<Constraint[]>([]);
 
 const enableDrawConstraint = ref(false);
@@ -241,21 +195,19 @@ const drawY = ref();
 const stretchification = ref(1);
 const stretchDepth = ref(11);
 
-if (!route.query.netlist) {
-  router.push("/");
-}
-
 const circuit = ref<Circuit | null>(null);
 
 const paths = ref<[number, number][][]>([]);
-const showBreakouts = ref(false);
+// const showBreakouts = ref(false);
 let currentPathIndex = -1;
-
-const netlist = JSON.parse(route.query.netlist as string);
-
-const prettyVector = (v: { angle: number; mag: number }) => {
-  return `(${v.mag.toFixed(2)}, ${v.angle.toFixed(2)})`;
-};
+const netlist = ref({})     
+const _netlist = storeToRefs(useNetlistStore()).netlist.value
+if (_netlist == "") {
+  alert("netlist not defined!")
+  router.push("/")
+} else {
+  netlist.value = JSON.parse(_netlist)
+} 
 
 function getCtx(): CanvasRenderingContext2D | null {
   if (!canvas.value) {
@@ -747,72 +699,32 @@ const getProcessing = () => {
     })
   );
 };
-const ws = new WebSocket("ws://localhost:8000/session");
-const wsOpen = ref(false);
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log(data.label);
-  // console.log(`[${data.label}] ${data.message || data.nodes}`)
-  if (data.label == "graph") {
-    circuit.value = data.circuit;
-    const layer_refs = Object.keys(circuit.value?.layers ?? {});
-    document.addEventListener("keydown", handleKeyDown);
-    if (layer_refs && layer_refs.length > 0) {
-      selectedLayer.value = layer_refs[0];
-      renderView();
-    }
-  }
-  if (data.label == "paths") {
-    clearCanvas();
-    nodes.value = data.nodes.map((node: PhysicalNode) => ({
-      ...node,
-      color: "#ebbcba",
-    }));
-    if (nodes_original.value.length == 0) {
-      nodes_original.value = nodes.value;
-    }
-    console.log(data.points);
-    points.value = data.points;
-    // renderGraph();
+const onNewGraph = (newCircuit: Circuit) => {
+  circuit.value = newCircuit;
+  const layer_refs = Object.keys(circuit.value?.layers ?? {});
+  document.addEventListener("keydown", handleKeyDown);
+  if (layer_refs && layer_refs.length > 0) {
+    selectedLayer.value = layer_refs[0];
     renderView();
   }
-
-  if (data.label == "svg") {
-    const blob = new Blob([data.file], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    window.open(url);
+}
+const onNewPath = (newNodes: PhysicalNode[], newPoints: any[]) => {
+  clearCanvas();
+  nodes.value = newNodes.map((node: PhysicalNode) => ({
+    ...node,
+    color: "#ebbcba",
+  }));
+  if (nodes_original.value.length == 0) {
+    nodes_original.value = nodes.value;
   }
-
-  if (data.label == "processing") {
-    const blob = new Blob([data.file], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    window.open(url);
-  }
-
-  if (data.label == "message") {
-    alert(data.message);
-  }
-};
-ws.onopen = () => {
-  ws.send(
-    JSON.stringify({
-      label: "netlist",
-      data: netlist,
-    })
-  );
-  wsOpen.value = true;
-  ws.send(
-    JSON.stringify({
-      label: "with_stretchification",
-      stretchification: stretchification.value,
-      depth: stretchDepth.value / 10,
-    })
-  );
-};
-
+  points.value = newPoints;
+  // renderGraph();
+  renderView();
+}
+const {ws, open} = useWebSocket("ws://localhost:8000/session", netlist.value, {stretchification: stretchification.value, depth: stretchDepth.value}, onNewGraph, onNewPath) 
 watch([stretchDepth, stretchification, time], (v) => {
   // clearCanvas()
-  if (wsOpen.value) {
+  if (open.value) {
     console.log(v[0], v[1], v[2]);
     ws.send(
       JSON.stringify({
