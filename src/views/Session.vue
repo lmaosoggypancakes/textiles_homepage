@@ -92,6 +92,7 @@
     :module_ref="selectedModule ?? ''"
     @editModule="editModuleHandler"
     @move="moveModuleHandler"
+    @rotate="rotateModuleHandler"
     @moveLayer="moveLayerHandler"
     @mergeModules="mergeModulesActionHandler"
     v-if="
@@ -104,7 +105,7 @@
     :pos="selectedComponentPos"
     :componentRef="selectedComponent ?? ''"
     @move="moveComponentHandler"
-    @rotate="rotateHandler"
+    @rotate="rotateComponentHandler"
     v-if="
       showComponentMenu
         ? circuit?.layers[selectedLayer].modules[selectedModule ?? '']
@@ -160,6 +161,7 @@ import {
   type Breakout,
   type Circuit,
   type Position,
+  type Netlist,
 } from "../../types";
 import { isIn } from "@/../util";
 
@@ -172,7 +174,9 @@ import {
   getZoomScale,
   moveComponent,
   moveModule,
-} from "@/features/handleUser";
+  rotate90Component,
+  rotate90Module,
+} from "@/features/editCircuit";
 import ModuleMenu from "@/components/ModuleMenu.vue";
 import { ArrowsPointingInIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import ComponentMenu from "@/components/ComponentMenu.vue";
@@ -233,14 +237,14 @@ const circuit = ref<Circuit | null>(null);
 const paths = ref<[number, number][][]>([]);
 // const showBreakouts = ref(false);
 let currentPathIndex = -1;
-const netlist = ref({})     
-const _netlist = storeToRefs(useNetlistStore()).netlist.value
+const netlist = ref<Netlist>({ libraries: [], nets: [], parts: [] });
+const _netlist = storeToRefs(useNetlistStore()).netlist.value;
 if (_netlist == "") {
-  alert("netlist not defined!")
-  router.push("/")
+  alert("netlist not defined!");
+  router.push("/");
 } else {
-  netlist.value = JSON.parse(_netlist)
-} 
+  netlist.value = JSON.parse(_netlist);
+}
 
 function getCtx(): CanvasRenderingContext2D | null {
   if (!canvas.value) {
@@ -348,8 +352,23 @@ function moveComponentHandler() {
   renderView();
 }
 
-function rotateHandler() {
+function rotateComponentHandler() {
   canvasMode.value = "view_module";
+  if (!circuit.value) {
+    return;
+  }
+  if (!selectedModule.value) {
+    return;
+  }
+  if (!selectedComponent.value) {
+    return;
+  }
+  circuit.value = rotate90Component(
+    selectedComponent.value,
+    selectedModule.value,
+    selectedLayer.value,
+    circuit.value
+  );
   renderView();
 }
 
@@ -366,6 +385,22 @@ function mergeModulesHandler() {
   circuit.value = c;
   selectedModule.value = mRef;
   console.log(mRef);
+  renderView();
+}
+
+function rotateModuleHandler() {
+  canvasMode.value = "view_layer";
+  if (!circuit.value) {
+    return;
+  }
+  if (!selectedModule.value) {
+    return;
+  }
+  circuit.value = rotate90Module(
+    selectedModule.value,
+    selectedLayer.value,
+    circuit.value
+  );
   renderView();
 }
 
@@ -851,7 +886,7 @@ const onNewGraph = (newCircuit: Circuit) => {
     selectedLayer.value = layer_refs[0];
     renderView();
   }
-}
+};
 const onNewPath = (newNodes: PhysicalNode[], newPoints: any[]) => {
   clearCanvas();
   nodes.value = newNodes.map((node: PhysicalNode) => ({
@@ -864,8 +899,14 @@ const onNewPath = (newNodes: PhysicalNode[], newPoints: any[]) => {
   points.value = newPoints;
   // renderGraph();
   renderView();
-}
-const {ws, open} = useWebSocket("ws://localhost:8000/session", netlist.value, {stretchification: stretchification.value, depth: stretchDepth.value}, onNewGraph, onNewPath) 
+};
+const { ws, open } = useWebSocket(
+  "ws://localhost:8000/session",
+  netlist.value,
+  { stretchification: stretchification.value, depth: stretchDepth.value },
+  onNewGraph,
+  onNewPath
+);
 watch([stretchDepth, stretchification, time], (v) => {
   // clearCanvas()
   if (open.value) {

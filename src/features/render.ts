@@ -1,5 +1,5 @@
 import type { Circuit, Footprint, Layer, Module } from "types";
-import { getZoomScale } from "./handleUser";
+import { getZoomScale } from "./editCircuit";
 
 export function _renderCircuit(
   circuit: Circuit,
@@ -115,7 +115,8 @@ export function _renderModule(
               ctx,
               highlightedComponent === component.ref,
               selectedComponent === component.ref,
-              zoomed_in ? getZoomScale(module) : 1.0
+              zoomed_in ? getZoomScale(module) : 1.0,
+              component.angle
             );
           }
         } else {
@@ -131,7 +132,8 @@ export function _renderModule(
           ctx,
           highlightedComponent === component.ref,
           selectedComponent === component.ref,
-          zoomed_in ? getZoomScale(module) : 1.0
+          zoomed_in ? getZoomScale(module) : 1.0,
+          component.angle
         );
       }
     }
@@ -160,17 +162,22 @@ function renderFootprint(
   ctx: CanvasRenderingContext2D,
   highlightedComponent: boolean,
   selectedComponent: boolean,
-  scale: number
+  scale: number,
+  angle: number
 ) {
   const fcrtyrd_shapes = footprint.paths[0];
   const silks_shapes = footprint.paths[1];
   const pad_shapes = footprint.paths[2];
+  ctx.save();
+  ctx.translate(base_x, base_y);
+  ctx.rotate((angle * Math.PI) / 180);
+  ctx.translate(-base_x, -base_y);
   if (fcrtyrd_shapes) {
     fcrtyrd_shapes.forEach((shape) => {
       shape.paths.forEach((path) => {
         ctx.beginPath();
-        ctx.moveTo(base_x + scale * path[0][0], base_y + scale * path[0][1]);
-        ctx.lineTo(base_x + scale * path[1][0], base_y + scale * path[1][1]);
+        ctx.moveTo(base_x + scale * path[0].x, base_y + scale * path[0].y);
+        ctx.lineTo(base_x + scale * path[1].x, base_y + scale * path[1].y);
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#aaaf";
         if (highlightedComponent) {
@@ -187,8 +194,8 @@ function renderFootprint(
     silks_shapes.forEach((shape) => {
       shape.paths.forEach((path) => {
         ctx.beginPath();
-        ctx.moveTo(base_x + scale * path[0][0], base_y + scale * path[0][1]);
-        ctx.lineTo(base_x + scale * path[1][0], base_y + scale * path[1][1]);
+        ctx.moveTo(base_x + scale * path[0].x, base_y + scale * path[0].y);
+        ctx.lineTo(base_x + scale * path[1].x, base_y + scale * path[1].y);
         ctx.lineWidth = 2;
         ctx.strokeStyle = "#258f";
         if (highlightedComponent) {
@@ -205,11 +212,11 @@ function renderFootprint(
     pad_shapes.forEach((shape) => {
       ctx.beginPath();
       ctx.moveTo(
-        base_x + scale * shape.paths[0][0][0],
-        base_y + scale * shape.paths[0][0][1]
+        base_x + scale * shape.paths[0][0].x,
+        base_y + scale * shape.paths[0][0].y
       );
       shape.paths.forEach((path) => {
-        ctx.lineTo(base_x + scale * path[1][0], base_y + scale * path[1][1]);
+        ctx.lineTo(base_x + scale * path[1].x, base_y + scale * path[1].y);
       });
       ctx.closePath();
       ctx.lineWidth = 2;
@@ -223,4 +230,5 @@ function renderFootprint(
       ctx.fill();
     });
   }
+  ctx.restore();
 }

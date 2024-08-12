@@ -22,6 +22,28 @@ export function subPosition(a: Position, b: Position) {
   };
 }
 
+export function getPolar(pos: Position) {
+  return [
+    Math.sqrt(Math.pow(pos.x, 2) + Math.pow(pos.y, 2)),
+    calculate360Angle(pos.x, pos.y),
+  ];
+}
+
+export function rotatePosition(pos: Position, degrees: number): Position {
+  const [r, a] = getPolar(pos);
+  return {
+    x: r * Math.cos(((a + degrees) * Math.PI) / 180),
+    y: r * Math.sin(((a + degrees) * Math.PI) / 180),
+  };
+}
+
+export function rotate90Position(pos: Position): Position {
+  return {
+    x: pos.y,
+    y: -pos.x,
+  };
+}
+
 export function getModuleClicked(
   click_x: number,
   click_y: number,
@@ -60,9 +82,13 @@ export function getComponentClicked(
     const module_y = zoomed_in ? 250 : module.pos.y;
     const distance_x = click_x - (scale * componentPos.x + module_x);
     const distance_y = click_y - (scale * componentPos.y + module_y);
+    const width =
+      component.angle % 180 === 90 ? component.height : component.width;
+    const height =
+      component.angle % 180 === 90 ? component.width : component.height;
     if (
-      Math.abs(distance_x) < (component.width * scale) / 2 &&
-      Math.abs(distance_y) < (component.height * scale) / 2
+      Math.abs(distance_x) < (width * scale) / 2 &&
+      Math.abs(distance_y) < (height * scale) / 2
     ) {
       return component.ref;
     }
@@ -130,59 +156,96 @@ export function moveModule(
   return circuit;
 }
 
+export function rotate90Module(
+  moduleRef: string,
+  layer: string,
+  circuit: Circuit
+): Circuit {
+  const module = circuit.layers[layer].modules[moduleRef];
+  module.angle += 90;
+  Object.keys(module.components).forEach((componentRef) => {
+    module.components[componentRef].pos = rotate90Position(
+      module.components[componentRef].pos
+    );
+    circuit = rotate90Component(componentRef, moduleRef, layer, circuit);
+  });
+
+  const moduleConnections = getModuleConnections(
+    moduleRef,
+    circuit.layers[layer]
+  );
+  moduleConnections.forEach((trace) => {
+    if (trace[1].a.ref === moduleRef && typeof trace[1].a.pin === "string") {
+      trace[1].a.pos = addPosition(
+        module.pos,
+        module.components[trace[1].a.pin].pos
+      );
+    } else if (trace[1].b.ref === moduleRef) {
+      trace[1].b.pos = addPosition(
+        module.pos,
+        module.components[trace[1].b.pin].pos
+      );
+    }
+  });
+  return circuit;
+}
+
 function calculate360Angle(offset_x: number, offset_y: number): number {
   var radians = Math.atan2(-offset_y, offset_x);
   if (radians < 0) radians += 2 * Math.PI;
   return (radians * 180) / Math.PI;
 }
 
-function getPadPos(padPos: number, r: number): [number, number] {
+function getPadPos(padPos: number, r: number, angle: number): [number, number] {
   const radius = r - 4;
-
+  const radians = (angle * Math.PI) / 180;
   switch (padPos) {
     case 0: {
-      return [radius * Math.cos(Math.PI / 4), radius * Math.sin(Math.PI / 4)];
+      return [
+        radius * Math.cos(Math.PI / 4 + radians),
+        radius * Math.sin(Math.PI / 4 + radians),
+      ];
     }
     case 1: {
       return [
-        radius * Math.cos((Math.PI * 7) / 16),
-        radius * Math.sin((Math.PI * 7) / 16),
+        radius * Math.cos((Math.PI * 7) / 16 + radians),
+        radius * Math.sin((Math.PI * 7) / 16 + radians),
       ];
     }
     case 2: {
       return [
-        radius * Math.cos((Math.PI * 9) / 16),
-        radius * Math.sin((Math.PI * 9) / 16),
+        radius * Math.cos((Math.PI * 9) / 16 + radians),
+        radius * Math.sin((Math.PI * 9) / 16 + radians),
       ];
     }
     case 3: {
       return [
-        radius * Math.cos((Math.PI * 3) / 4),
-        radius * Math.sin((Math.PI * 3) / 4),
+        radius * Math.cos((Math.PI * 3) / 4 + radians),
+        radius * Math.sin((Math.PI * 3) / 4 + radians),
       ];
     }
     case 4: {
       return [
-        radius * Math.cos((Math.PI * 5) / 4),
-        radius * Math.sin((Math.PI * 5) / 4),
+        radius * Math.cos((Math.PI * 5) / 4 + radians),
+        radius * Math.sin((Math.PI * 5) / 4 + radians),
       ];
     }
     case 5: {
       return [
-        radius * Math.cos((Math.PI * 23) / 16),
-        radius * Math.sin((Math.PI * 23) / 16),
+        radius * Math.cos((Math.PI * 23) / 16 + radians),
+        radius * Math.sin((Math.PI * 23) / 16 + radians),
       ];
     }
     case 6: {
       return [
-        radius * Math.cos((Math.PI * 25) / 16),
-        radius * Math.sin((Math.PI * 25) / 16),
+        radius * Math.cos((Math.PI * 25) / 16 + radians),
+        radius * Math.sin((Math.PI * 25) / 16 + radians),
       ];
     }
     case 7: {
       return [
-        radius * Math.cos((Math.PI * 7) / 4),
-        radius * Math.sin((Math.PI * 7) / 4),
+        radius * Math.cos((Math.PI * 7) / 4 + radians),
+        radius * Math.sin((Math.PI * 7) / 4 + radians),
       ];
     }
   }
@@ -190,24 +253,31 @@ function getPadPos(padPos: number, r: number): [number, number] {
   return [0, 0];
 }
 
-function snapPadPos(angle: number, r: number): [number, number] {
-  const radius = r - 4;
-  if (0 <= angle && angle < 60) {
-    return getPadPos(0, r);
-  } else if (60 <= angle && angle < 90) {
-    return getPadPos(1, r);
-  } else if (90 <= angle && angle < 120) {
-    return getPadPos(2, r);
-  } else if (120 <= angle && angle < 180) {
-    return getPadPos(3, r);
-  } else if (180 <= angle && angle < 240) {
-    return getPadPos(4, r);
-  } else if (240 <= angle && angle < 270) {
-    return getPadPos(5, r);
-  } else if (270 <= angle && angle < 300) {
-    return getPadPos(6, r);
-  } else if (300 <= angle && angle < 360) {
-    return getPadPos(7, r);
+function snapPadPos(
+  angle: number,
+  r: number,
+  moduleAngle: number
+): [number, number] {
+  const radius = r;
+  const offset_angle = (angle - moduleAngle) % 360;
+  const normalized_offset_angle =
+    offset_angle < 0 ? offset_angle + 360 : offset_angle;
+  if (0 <= normalized_offset_angle && normalized_offset_angle < 60) {
+    return getPadPos(0, radius, moduleAngle);
+  } else if (60 <= normalized_offset_angle && normalized_offset_angle < 90) {
+    return getPadPos(1, radius, moduleAngle);
+  } else if (90 <= normalized_offset_angle && normalized_offset_angle < 120) {
+    return getPadPos(2, radius, moduleAngle);
+  } else if (120 <= normalized_offset_angle && normalized_offset_angle < 180) {
+    return getPadPos(3, radius, moduleAngle);
+  } else if (180 <= normalized_offset_angle && normalized_offset_angle < 240) {
+    return getPadPos(4, radius, moduleAngle);
+  } else if (240 <= normalized_offset_angle && normalized_offset_angle < 270) {
+    return getPadPos(5, radius, moduleAngle);
+  } else if (270 <= normalized_offset_angle && normalized_offset_angle < 300) {
+    return getPadPos(6, radius, moduleAngle);
+  } else if (300 <= normalized_offset_angle && normalized_offset_angle < 360) {
+    return getPadPos(7, radius, moduleAngle);
   }
   return [0, 0];
 }
@@ -223,7 +293,7 @@ function getComponentOffsetPos(
   const offset_y = (mouse_y - 250) / getZoomScale(module);
   if (componentRef.startsWith("PAD")) {
     const angle = 360 - calculate360Angle(offset_x, offset_y);
-    return snapPadPos(angle, radius);
+    return snapPadPos(angle, radius, module.angle);
   }
   return [offset_x, offset_y];
 }
@@ -288,6 +358,43 @@ export function moveComponent(
       circuit.layers[layer].connections[conn[0]] = new_conn;
     });
   }
+  return circuit;
+}
+
+export function rotate90Component(
+  componentRef: string,
+  moduleRef: string,
+  layer: string,
+  circuit: Circuit
+): Circuit {
+  const component =
+    circuit.layers[layer].modules[moduleRef].components[componentRef];
+  component.angle += 90;
+  component.pin_coords = component.pin_coords.map((coord) => {
+    return rotate90Position(coord);
+  });
+  const connections = getComponentConnections(
+    componentRef,
+    circuit.layers[layer].modules[moduleRef]
+  );
+  connections.forEach((trace) => {
+    if (trace[1].a.ref === componentRef && typeof trace[1].a.pin === "number") {
+      trace[1].a.pos = addPosition(
+        component.pos,
+        component.pin_coords[trace[1].a.pin - 1]
+      );
+      trace[1].points[0] = { ...trace[1].a.pos };
+    } else if (
+      trace[1].b.ref === componentRef &&
+      typeof trace[1].b.pin === "number"
+    ) {
+      trace[1].b.pos = addPosition(
+        component.pos,
+        component.pin_coords[trace[1].b.pin - 1]
+      );
+      trace[1].points[trace[1].points.length - 1] = { ...trace[1].b.pos };
+    }
+  });
   return circuit;
 }
 
@@ -427,7 +534,6 @@ export function _mergeModules(
         };
       }
     );
-    console.log(nonPadConnections);
     new_module.connections = [...new_module.connections, ...nonPadConnections];
     const deleteTraces = traces.reduce<number[]>(
       (deleteTraces, trace): number[] => {
@@ -489,7 +595,8 @@ export function _mergeModules(
           const pad_pos = tupleToPos(
             getPadPos(
               Object.keys(pad_components).indexOf(conn.a.pin),
-              new_radius
+              new_radius,
+              pad_components[conn.a.pin].angle
             )
           );
           new_module.components[conn.a.pin] = {
@@ -535,7 +642,8 @@ export function _mergeModules(
           const pad_pos = tupleToPos(
             getPadPos(
               Object.keys(pad_components).indexOf(conn.b.pin),
-              new_radius
+              new_radius,
+              pad_components[conn.b.pin].angle
             )
           );
           new_module.components[conn.b.pin] = {
@@ -591,7 +699,6 @@ export function _mergeModules(
   modules.forEach((ref) => {
     delete circuit.layers[layer].modules[ref];
   });
-  console.log(new_module.connections);
   circuit.layers[layer].modules[new_ref] = new_module;
   return [circuit, new_ref];
 }

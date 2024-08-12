@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  ArrowPathIcon,
   ArrowsPointingOutIcon,
   ArrowsUpDownIcon,
   PencilIcon,
@@ -11,6 +12,7 @@ import type { Position } from "types";
 const emit = defineEmits<{
   editModule: [];
   move: [];
+  rotate: [];
   moveLayer: [];
   mergeModules: [];
 }>();
@@ -18,7 +20,6 @@ const props = defineProps<{
   pos: Position;
   module_ref: string;
 }>();
-console.log(props);
 </script>
 
 <template>
@@ -45,6 +46,12 @@ console.log(props);
         @click="() => emit('move')"
       >
         <ArrowsPointingOutIcon class="w-4 h-4 my-auto mr-2 rotate-45" />Move
+      </div>
+      <div
+        class="text-white text-base px-2 py-1 flex flex-row hover:cursor-pointer hover:bg-[#2f2d3e]"
+        @click="() => emit('rotate')"
+      >
+        <ArrowPathIcon class="w-4 h-4 my-auto mr-2 rotate-45" />Rotate
       </div>
       <div
         class="text-white text-base px-2 py-1 flex flex-row hover:cursor-pointer hover:bg-[#2f2d3e]"

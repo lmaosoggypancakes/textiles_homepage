@@ -14,7 +14,6 @@ const props = defineProps<{
   pos: Position;
   componentRef: string;
 }>();
-console.log(props);
 </script>
 
 <template>

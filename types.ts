@@ -70,12 +70,12 @@ export interface Position {
 }
 
 export interface Shape {
-  paths: [[number, number], [number, number]][];
+  paths: [Position, Position][];
 }
 
 export interface Footprint {
   paths: Shape[][];
-  pins: number[][];
+  pins: Position[];
   width: number;
   height: number;
 }
