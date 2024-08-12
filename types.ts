@@ -87,6 +87,7 @@ export interface ConnectionNode {
 }
 
 export interface Trace {
+  ref: string;
   a: ConnectionNode;
   b: ConnectionNode;
   points: Position[];
@@ -107,7 +108,7 @@ export interface Component {
 export interface Module {
   ref: string;
   components: { [x: string]: Component };
-  connections: Trace[];
+  connections: { [x: string]: Trace };
   pads: Component[];
   radius: number;
   pos: Position;
@@ -117,7 +118,7 @@ export interface Module {
 export interface Layer {
   ref: string;
   modules: { [x: string]: Module };
-  connections: Trace[];
+  connections: { [x: string]: Trace };
   vias: Module[];
 }
 

@@ -880,6 +880,7 @@ const getProcessing = () => {
 };
 const onNewGraph = (newCircuit: Circuit) => {
   circuit.value = newCircuit;
+  console.log(newCircuit);
   const layer_refs = Object.keys(circuit.value?.layers ?? {});
   document.addEventListener("keydown", handleKeyDown);
   if (layer_refs && layer_refs.length > 0) {

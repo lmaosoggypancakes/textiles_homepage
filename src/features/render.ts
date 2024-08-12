@@ -38,14 +38,16 @@ export function _renderLayer(
       false
     );
   });
-  layer.connections.forEach((conn) => {
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
-    ctx.beginPath();
-    ctx.moveTo(conn.a.pos.x, conn.a.pos.y);
-    ctx.lineTo(conn.b.pos.x, conn.b.pos.y);
-    ctx.stroke();
-  });
+  Object.keys(layer.connections)
+    .map((ref) => layer.connections[ref])
+    .forEach((conn) => {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
+      ctx.beginPath();
+      ctx.moveTo(conn.a.pos.x, conn.a.pos.y);
+      ctx.lineTo(conn.b.pos.x, conn.b.pos.y);
+      ctx.stroke();
+    });
 }
 
 export function _renderModule(
@@ -138,21 +140,23 @@ export function _renderModule(
       }
     }
   });
-  module.connections.forEach((connection) => {
-    const scale = zoomed_in ? getZoomScale(module) : 1;
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
-    ctx.beginPath();
-    ctx.moveTo(
-      module_x + scale * connection.a.pos.x,
-      module_y + scale * connection.a.pos.y
-    );
-    ctx.lineTo(
-      module_x + scale * connection.b.pos.x,
-      module_y + scale * connection.b.pos.y
-    );
-    ctx.stroke();
-  });
+  Object.keys(module.connections)
+    .map((ref) => module.connections[ref])
+    .forEach((connection) => {
+      const scale = zoomed_in ? getZoomScale(module) : 1;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
+      ctx.beginPath();
+      ctx.moveTo(
+        module_x + scale * connection.a.pos.x,
+        module_y + scale * connection.a.pos.y
+      );
+      ctx.lineTo(
+        module_x + scale * connection.b.pos.x,
+        module_y + scale * connection.b.pos.y
+      );
+      ctx.stroke();
+    });
 }
 
 function renderFootprint(

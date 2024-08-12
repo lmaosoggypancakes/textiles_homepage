@@ -96,29 +96,26 @@ export function getComponentClicked(
   return null;
 }
 
-export function getModuleConnections(
-  moduleRef: string,
-  layer: Layer
-): [number, Trace][] {
-  return layer.connections
-    .map((trace, i) => {
-      return [i, trace] as [number, Trace];
+export function getModuleConnections(moduleRef: string, layer: Layer): Trace[] {
+  return Object.keys(layer.connections)
+    .map((trace) => {
+      return layer.connections[trace];
     })
     .filter((elem) => {
-      return elem[1].a.ref === moduleRef || elem[1].b.ref === moduleRef;
+      return elem.a.ref === moduleRef || elem.b.ref === moduleRef;
     });
 }
 
 export function getComponentConnections(
   componentRef: string,
   module: Module
-): [number, Trace][] {
-  return module.connections
-    .map((trace, i) => {
-      return [i, trace] as [number, Trace];
+): Trace[] {
+  return Object.keys(module.connections)
+    .map((trace) => {
+      return module.connections[trace];
     })
     .filter((elem) => {
-      return elem[1].a.ref === componentRef || elem[1].b.ref === componentRef;
+      return elem.a.ref === componentRef || elem.b.ref === componentRef;
     });
 }
 
@@ -135,8 +132,9 @@ export function moveModule(
     moduleRef,
     circuit.layers[layer]
   );
+  console.log(moduleConnections);
   moduleConnections.forEach((conn) => {
-    const new_conn = conn[1];
+    const new_conn = conn;
     const a_pin_diff_x = new_conn.a.pos.x - module.pos.x;
     const a_pin_diff_y = new_conn.a.pos.y - module.pos.y;
     const b_pin_diff_x = new_conn.b.pos.x - module.pos.x;
@@ -149,7 +147,8 @@ export function moveModule(
       new_conn.b.pos.x = mouse_x + b_pin_diff_x;
       new_conn.b.pos.y = mouse_y + b_pin_diff_y;
     }
-    circuit.layers[layer].connections[conn[0]] = new_conn;
+    console.log(new_conn.ref);
+    circuit.layers[layer].connections[new_conn.ref] = new_conn;
   });
   circuit.layers[layer].modules[moduleRef].pos.x = mouse_x;
   circuit.layers[layer].modules[moduleRef].pos.y = mouse_y;
@@ -175,16 +174,10 @@ export function rotate90Module(
     circuit.layers[layer]
   );
   moduleConnections.forEach((trace) => {
-    if (trace[1].a.ref === moduleRef && typeof trace[1].a.pin === "string") {
-      trace[1].a.pos = addPosition(
-        module.pos,
-        module.components[trace[1].a.pin].pos
-      );
-    } else if (trace[1].b.ref === moduleRef) {
-      trace[1].b.pos = addPosition(
-        module.pos,
-        module.components[trace[1].b.pin].pos
-      );
+    if (trace.a.ref === moduleRef && typeof trace.a.pin === "string") {
+      trace.a.pos = addPosition(module.pos, module.components[trace.a.pin].pos);
+    } else if (trace.b.ref === moduleRef) {
+      trace.b.pos = addPosition(module.pos, module.components[trace.b.pin].pos);
     }
   });
   return circuit;
@@ -322,7 +315,7 @@ export function moveComponent(
     module
   );
   componentConnections.forEach((conn) => {
-    const new_conn = conn[1];
+    const new_conn = conn;
     if (new_conn.a.ref === componentRef && typeof new_conn.a.pin === "number") {
       new_conn.a.pos.x = offset_x + component.pin_coords[new_conn.a.pin - 1].x;
       new_conn.a.pos.y = offset_y + component.pin_coords[new_conn.a.pin - 1].y;
@@ -342,7 +335,7 @@ export function moveComponent(
       circuit.layers[layer]
     );
     moduleConnections.forEach((conn) => {
-      const new_conn = conn[1];
+      const new_conn = conn;
       if (new_conn.a.pin !== componentRef && new_conn.b.pin !== componentRef) {
         return;
       }
@@ -355,7 +348,8 @@ export function moveComponent(
         new_conn.b.pos.x = offset_x + module.pos.x;
         new_conn.b.pos.y = offset_y + module.pos.y;
       }
-      circuit.layers[layer].connections[conn[0]] = new_conn;
+      console.log(conn.ref);
+      circuit.layers[layer].connections[conn.ref] = new_conn;
     });
   }
   return circuit;
@@ -378,21 +372,21 @@ export function rotate90Component(
     circuit.layers[layer].modules[moduleRef]
   );
   connections.forEach((trace) => {
-    if (trace[1].a.ref === componentRef && typeof trace[1].a.pin === "number") {
-      trace[1].a.pos = addPosition(
+    if (trace.a.ref === componentRef && typeof trace.a.pin === "number") {
+      trace.a.pos = addPosition(
         component.pos,
-        component.pin_coords[trace[1].a.pin - 1]
+        component.pin_coords[trace.a.pin - 1]
       );
-      trace[1].points[0] = { ...trace[1].a.pos };
+      trace.points[0] = { ...trace.a.pos };
     } else if (
-      trace[1].b.ref === componentRef &&
-      typeof trace[1].b.pin === "number"
+      trace.b.ref === componentRef &&
+      typeof trace.b.pin === "number"
     ) {
-      trace[1].b.pos = addPosition(
+      trace.b.pos = addPosition(
         component.pos,
-        component.pin_coords[trace[1].b.pin - 1]
+        component.pin_coords[trace.b.pin - 1]
       );
-      trace[1].points[trace[1].points.length - 1] = { ...trace[1].b.pos };
+      trace.points[trace.points.length - 1] = { ...trace.b.pos };
     }
   });
   return circuit;
@@ -411,10 +405,10 @@ export function getPadToComponent(
   const module = circuit.layers[layer].modules[moduleRef];
   const traces = getComponentConnections(padRef, module);
   if (traces.length === 1) {
-    if (traces[0][1].a.ref === padRef) {
-      return traces[0][1].b;
-    } else if (traces[0][1].b.ref === padRef) {
-      return traces[0][1].a;
+    if (traces[0].a.ref === padRef) {
+      return traces[0].b;
+    } else if (traces[0].b.ref === padRef) {
+      return traces[0].a;
     }
   }
   return null;
@@ -431,14 +425,14 @@ export function checkComponentsConnection(
     (isConnected, trace) => {
       return (
         isConnected ||
-        (trace[1].a.ref === a_ref &&
-          trace[1].a.pin === a_pin &&
-          trace[1].b.ref === b_ref &&
-          trace[1].b.pin === b_pin) ||
-        (trace[1].b.ref === a_ref &&
-          trace[1].b.pin === a_pin &&
-          trace[1].a.ref === b_ref &&
-          trace[1].a.pin === b_pin)
+        (trace.a.ref === a_ref &&
+          trace.a.pin === a_pin &&
+          trace.b.ref === b_ref &&
+          trace.b.pin === b_pin) ||
+        (trace.b.ref === a_ref &&
+          trace.b.pin === a_pin &&
+          trace.a.ref === b_ref &&
+          trace.a.pin === b_pin)
       );
     },
     false
@@ -453,9 +447,17 @@ export function tupleToPos(tuple: [number, number]): Position {
 }
 
 export function getNonPadConnections(module: Module): Trace[] {
-  return module.connections.filter((trace) => {
-    return !trace.a.ref.startsWith("PAD") && !trace.b.ref.startsWith("PAD");
-  });
+  return Object.keys(module.connections)
+    .map((ref) => {
+      return module.connections[ref];
+    })
+    .filter((trace) => {
+      return !trace.a.ref.startsWith("PAD") && !trace.b.ref.startsWith("PAD");
+    });
+}
+
+export function getTraceRef(a: ConnectionNode, b: ConnectionNode): string {
+  return `${a.ref}-${a.pin}-${b.ref}-${b.pin}`;
 }
 
 export function _mergeModules(
@@ -494,7 +496,7 @@ export function _mergeModules(
   const new_module: Module = {
     ref: new_ref,
     components: new_components,
-    connections: [],
+    connections: {},
     pads: [],
     radius: new_radius,
     pos: circuit.layers[layer].modules[modules[0]].pos,
@@ -511,13 +513,20 @@ export function _mergeModules(
   modules.forEach((modRef) => {
     const module = circuit.layers[layer].modules[modRef];
     const traces = getModuleConnections(module.ref, circuit.layers[layer]);
-    const nonPadConnections = getNonPadConnections(module).map<Trace>(
-      (conn): Trace => {
+    const nonPadConnections = getNonPadConnections(module).reduce<{
+      [x: string]: Trace;
+    }>(
+      (
+        connections,
+        conn
+      ): {
+        [x: string]: Trace;
+      } => {
         if (typeof conn.a.pin === "string") {
-          return conn;
+          return connections;
         }
         if (typeof conn.b.pin === "string") {
-          return conn;
+          return connections;
         }
         const a_pos = addPosition(
           new_module.components[conn.a.ref].pin_coords[conn.a.pin - 1],
@@ -527,35 +536,41 @@ export function _mergeModules(
           new_module.components[conn.b.ref].pin_coords[conn.b.pin - 1],
           new_components[conn.b.ref].pos
         );
+        const new_ref = `${conn.a.ref}-${conn.a.pin}-${conn.b.ref}-${conn.b.pin}`;
         return {
-          a: { ...conn.a, pos: a_pos },
-          b: { ...conn.b, pos: b_pos },
-          points: [a_pos, b_pos],
+          ...connections,
+          new_ref: {
+            ref: new_ref,
+            a: { ...conn.a, pos: a_pos },
+            b: { ...conn.b, pos: b_pos },
+            points: [a_pos, b_pos],
+          },
         };
-      }
+      },
+      {}
     );
-    new_module.connections = [...new_module.connections, ...nonPadConnections];
-    const deleteTraces = traces.reduce<number[]>(
-      (deleteTraces, trace): number[] => {
-        if (
-          modules.includes(trace[1].a.ref) &&
-          modules.includes(trace[1].b.ref)
-        ) {
-          if (typeof trace[1].a.pin === "number") {
+    new_module.connections = {
+      ...new_module.connections,
+      ...nonPadConnections,
+    };
+    const deleteTraces = traces.reduce<string[]>(
+      (deleteTraces, trace): string[] => {
+        if (modules.includes(trace.a.ref) && modules.includes(trace.b.ref)) {
+          if (typeof trace.a.pin === "number") {
             return deleteTraces;
           }
-          if (typeof trace[1].b.pin === "number") {
+          if (typeof trace.b.pin === "number") {
             return deleteTraces;
           }
           const a_node: ConnectionNode | null = getPadToComponent(
-            trace[1].a.pin,
-            trace[1].a.ref,
+            trace.a.pin,
+            trace.a.ref,
             layer,
             circuit
           );
           const b_node: ConnectionNode | null = getPadToComponent(
-            trace[1].b.pin,
-            trace[1].b.ref,
+            trace.b.pin,
+            trace.b.ref,
             layer,
             circuit
           );
@@ -576,7 +591,9 @@ export function _mergeModules(
             new_module.components[b_node.ref].pin_coords[b_node.pin - 1],
             new_components[b_node.ref].pos
           );
+          const new_ref = getTraceRef(a_node, b_node);
           const new_trace: Trace = {
+            ref: new_ref,
             a: {
               ...a_node,
               pos: a_pos,
@@ -587,10 +604,13 @@ export function _mergeModules(
             },
             points: [a_pos, b_pos],
           };
-          new_module.connections = [...new_module.connections, new_trace];
-          return [...deleteTraces, trace[0]];
+          new_module.connections = {
+            ...new_module.connections,
+            new_ref: new_trace,
+          };
+          return [...deleteTraces, trace.ref];
         }
-        const conn = circuit.layers[layer].connections[trace[0]];
+        const conn = circuit.layers[layer].connections[trace.ref];
         if (conn.a.ref === modRef && typeof conn.a.pin === "string") {
           const pad_pos = tupleToPos(
             getPadPos(
@@ -629,12 +649,17 @@ export function _mergeModules(
               new_module
             )
           ) {
+            const new_ref = getTraceRef(a_node, b_node);
             const pad_trace: Trace = {
+              ref: new_ref,
               a: a_node,
               b: b_node,
               points: [a_node.pos, b_node.pos],
             };
-            new_module.connections = [...new_module.connections, pad_trace];
+            new_module.connections = {
+              ...new_module.connections,
+              new_ref: pad_trace,
+            };
           }
           conn.a.ref = new_ref;
           conn.a.pos = addPosition(pad_pos, new_module.pos);
@@ -676,12 +701,17 @@ export function _mergeModules(
               new_module
             )
           ) {
+            const new_ref = getTraceRef(a_node, b_node);
             const pad_trace: Trace = {
+              ref: new_ref,
               a: a_node,
               b: b_node,
               points: [a_node.pos, b_node.pos],
             };
-            new_module.connections = [...new_module.connections, pad_trace];
+            new_module.connections = {
+              ...new_module.connections,
+              new_ref: pad_trace,
+            };
           }
           conn.b.ref = new_ref;
           conn.b.pos = addPosition(pad_pos, new_module.pos);
@@ -690,10 +720,8 @@ export function _mergeModules(
       },
       []
     );
-    circuit.layers[layer].connections = circuit.layers[
-      layer
-    ].connections.filter((_, i) => {
-      return !deleteTraces.includes(i);
+    deleteTraces.forEach((ref) => {
+      delete circuit.layers[layer].connections[ref];
     });
   });
   modules.forEach((ref) => {
