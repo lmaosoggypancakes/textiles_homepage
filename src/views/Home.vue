@@ -24,6 +24,8 @@ import { ref } from "vue";
 import { type Netlist } from "@/../types";
 import axios, { AxiosError, type AxiosResponse } from "axios";
 import { useRouter } from "vue-router";
+import { useNetlistStore } from "@/stores/netlist";
+const { setNetlist } = useNetlistStore()
 
 const router = useRouter();
 
@@ -88,8 +90,9 @@ const parseFile = async (data: string) => {
     });
   if (response) {
     const netlist = response.data;
+    setNetlist(JSON.stringify(netlist))
     router.push(
-      `/session/?netlist=${encodeURIComponent(JSON.stringify(netlist))}`
+      `/session/`
     );
   }
 };
