@@ -96,10 +96,12 @@ export interface Component {
   ref: string;
   name: string;
   pins: number;
+  pin_coords: Position[];
   pos: Position;
   is_pad: boolean;
   width: number;
   height: number;
+  angle: number;
 }
 
 export interface Module {
@@ -109,6 +111,7 @@ export interface Module {
   pads: Component[];
   radius: number;
   pos: Position;
+  angle: number;
 }
 
 export interface Layer {

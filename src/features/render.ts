@@ -1,4 +1,5 @@
 import type { Circuit, Footprint, Layer, Module } from "types";
+import { getZoomScale } from "./handleUser";
 
 export function _renderCircuit(
   circuit: Circuit,
@@ -9,7 +10,7 @@ export function _renderCircuit(
     if (!layer) {
       return;
     }
-    _renderLayer(layer, null, null, circuit, ctx);
+    _renderLayer(layer, null, null, [], circuit, ctx);
   });
 }
 
@@ -17,6 +18,7 @@ export function _renderLayer(
   layer: Layer,
   selectedModule: string | null,
   highlightedModule: string | null,
+  mergeModules: string[],
   circuit: Circuit,
   ctx: CanvasRenderingContext2D
 ) {
@@ -31,7 +33,7 @@ export function _renderLayer(
       null,
       circuit,
       ctx,
-      selectedModule === modRef,
+      selectedModule === modRef || mergeModules.includes(modRef),
       highlightedModule === modRef,
       false
     );
@@ -61,7 +63,9 @@ export function _renderModule(
   }
   const module_x = zoomed_in ? 250 : module.pos.x;
   const module_y = zoomed_in ? 250 : module.pos.y;
-  const module_radius = zoomed_in ? module.radius * 5 : module.radius;
+  const module_radius = zoomed_in
+    ? module.radius * getZoomScale(module)
+    : module.radius;
   ctx.beginPath();
   ctx.arc(module_x, module_y, module_radius, 0, 2 * Math.PI);
   ctx.fillStyle = "#431";
@@ -86,8 +90,12 @@ export function _renderModule(
     if (!component) {
       return;
     }
-    const component_x = zoomed_in ? 5.0 * component.pos.x : component.pos.x;
-    const component_y = zoomed_in ? 5.0 * component.pos.y : component.pos.y;
+    const component_x = zoomed_in
+      ? getZoomScale(module) * component.pos.x
+      : component.pos.x;
+    const component_y = zoomed_in
+      ? getZoomScale(module) * component.pos.y
+      : component.pos.y;
     const base_x = module_x + component_x;
     const base_y = module_y + component_y;
     if (component.ref !== "") {
@@ -105,9 +113,9 @@ export function _renderModule(
               base_x,
               base_y,
               ctx,
-              zoomed_in,
               highlightedComponent === component.ref,
-              selectedComponent === component.ref
+              selectedComponent === component.ref,
+              zoomed_in ? getZoomScale(module) : 1.0
             );
           }
         } else {
@@ -121,15 +129,15 @@ export function _renderModule(
           base_x,
           base_y,
           ctx,
-          zoomed_in,
           highlightedComponent === component.ref,
-          selectedComponent === component.ref
+          selectedComponent === component.ref,
+          zoomed_in ? getZoomScale(module) : 1.0
         );
       }
     }
   });
   module.connections.forEach((connection) => {
-    const scale = zoomed_in ? 5 : 1;
+    const scale = zoomed_in ? getZoomScale(module) : 1;
     ctx.lineWidth = 2;
     ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
     ctx.beginPath();
@@ -150,11 +158,10 @@ function renderFootprint(
   base_x: number,
   base_y: number,
   ctx: CanvasRenderingContext2D,
-  zoomed_in: boolean,
   highlightedComponent: boolean,
-  selectedComponent: boolean
+  selectedComponent: boolean,
+  scale: number
 ) {
-  const scale = zoomed_in ? 5 : 1;
   const fcrtyrd_shapes = footprint.paths[0];
   const silks_shapes = footprint.paths[1];
   const pad_shapes = footprint.paths[2];

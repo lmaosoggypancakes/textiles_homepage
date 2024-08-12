@@ -141,7 +141,7 @@
     @editModule="editModuleHandler"
     @move="moveModuleHandler"
     @moveLayer="moveLayerHandler"
-    @mergeModules="mergeModulesHandler"
+    @mergeModules="mergeModulesActionHandler"
     v-if="
       showModuleMenu
         ? circuit?.layers[selectedLayer].modules[selectedModule ?? ''] ?? ''
@@ -171,6 +171,32 @@
   >
     <ArrowsPointingInIcon class="w-8 h-8 text-white" />
   </div>
+  <div
+    class="absolute p-1 m-1 hover:cursor-pointer hover:bg-[#3e3843] rounded-xl"
+    :style="{
+      left: canvas?.getBoundingClientRect().left + 'px',
+      top: canvas?.getBoundingClientRect().top + 'px',
+    }"
+    @click="viewLayerHandler"
+    v-if="canvasMode === 'merge_modules' ? true : null"
+  >
+    <XMarkIcon class="w-8 h-8 text-white" />
+  </div>
+  <div
+    class="absolute w-24 p-1 m-1 text-center bg-iris font-semibold hover:cursor-pointer hover:bg-iris/80 rounded-sm"
+    :style="{
+      left: `${
+        (canvas?.getBoundingClientRect().left ?? 0) +
+        (canvas?.getBoundingClientRect().width ?? 0) / 2
+      }px`,
+      top: `${(canvas?.getBoundingClientRect().top ?? 0) + 8}px`,
+      marginLeft: '-48px',
+    }"
+    @click="mergeModulesHandler"
+    v-if="canvasMode === 'merge_modules' ? true : null"
+  >
+    Merge
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -188,13 +214,15 @@ import { isIn } from "@/../util";
 import svg from "@/assets/module.svg";
 import { _renderCircuit, _renderLayer, _renderModule } from "@/features/render";
 import {
+  _mergeModules,
   getComponentClicked,
   getModuleClicked,
+  getZoomScale,
   moveComponent,
   moveModule,
 } from "@/features/handleUser";
 import ModuleMenu from "@/components/ModuleMenu.vue";
-import { ArrowsPointingInIcon } from "@heroicons/vue/24/outline";
+import { ArrowsPointingInIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import ComponentMenu from "@/components/ComponentMenu.vue";
 const img = new Image();
 img.src = svg;
@@ -205,6 +233,7 @@ const selectedModule = ref<string | null>(null);
 const selectedModulePos = ref<Position>({ x: 0.0, y: 0.0 });
 const highlightedModule = ref<string | null>(null);
 const showModuleMenu = ref<boolean>(false);
+const mergeModules = ref<string[]>([]);
 
 const selectedComponent = ref<string | null>(null);
 const selectedComponentPos = ref<Position>({ x: 0.0, y: 0.0 });
@@ -212,7 +241,11 @@ const highlightedComponent = ref<string | null>(null);
 const showComponentMenu = ref<boolean>(false);
 
 const canvasMode = ref<
-  "view_layer" | "view_module" | "move_module" | "move_component"
+  | "view_layer"
+  | "view_module"
+  | "move_module"
+  | "move_component"
+  | "merge_modules"
 >("view_layer");
 
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -271,7 +304,11 @@ function getCtx(): CanvasRenderingContext2D | null {
 }
 
 function renderView() {
-  if (canvasMode.value === "view_layer" || canvasMode.value === "move_module") {
+  if (
+    canvasMode.value === "view_layer" ||
+    canvasMode.value === "move_module" ||
+    canvasMode.value === "merge_modules"
+  ) {
     renderLayer();
   } else if (
     canvasMode.value === "view_module" ||
@@ -293,6 +330,7 @@ function renderLayer() {
     circuit.value.layers[selectedLayer.value],
     selectedModule.value,
     highlightedModule.value,
+    mergeModules.value,
     circuit.value,
     ctx
   );
@@ -336,11 +374,19 @@ function moveModuleHandler() {
 
 function moveLayerHandler() {}
 
-function mergeModulesHandler() {}
+function mergeModulesActionHandler() {
+  canvasMode.value = "merge_modules";
+  showModuleMenu.value = false;
+  if (selectedModule.value) {
+    mergeModules.value = [selectedModule.value];
+  }
+  renderView();
+}
 
 function viewLayerHandler() {
   canvasMode.value = "view_layer";
-  showModuleMenu.value = false;
+  showModuleMenu.value = true;
+  showComponentMenu.value = false;
   renderView();
 }
 
@@ -352,6 +398,22 @@ function moveComponentHandler() {
 
 function rotateHandler() {
   canvasMode.value = "view_module";
+  renderView();
+}
+
+function mergeModulesHandler() {
+  canvasMode.value = "view_module";
+  if (!circuit.value) {
+    return;
+  }
+  const [c, mRef] = _mergeModules(
+    mergeModules.value,
+    selectedLayer.value,
+    circuit.value
+  );
+  circuit.value = c;
+  selectedModule.value = mRef;
+  console.log(mRef);
   renderView();
 }
 
@@ -414,7 +476,8 @@ const handleDrag = (event: MouseEvent) => {
     }
   }
   switch (canvasMode.value) {
-    case "view_layer": {
+    case "view_layer":
+    case "merge_modules": {
       const moduleRef = getModuleClicked(
         event.offsetX,
         event.offsetY,
@@ -540,10 +603,15 @@ const handleClick = (event: MouseEvent) => {
         if (selectedComponent.value === componentRef) {
           selectedComponent.value = null;
         } else {
-          const component =
+          const module =
             circuit.value?.layers[selectedLayer.value].modules[
               selectedModule.value ?? ""
-            ].components[componentRef ?? ""];
+            ];
+          if (!module) {
+            showComponentMenu.value = false;
+            return null;
+          }
+          const component = module.components[componentRef ?? ""];
           if (!component) {
             showComponentMenu.value = false;
             return null;
@@ -553,32 +621,94 @@ const handleClick = (event: MouseEvent) => {
             x:
               canvas.value.getBoundingClientRect().left +
               250 +
-              5.0 * component.pos.x +
-              5.0 * (component.width / 2) * 1.5,
+              getZoomScale(module) * component.pos.x +
+              getZoomScale(module) * (component.width / 2) * 1.5,
             y:
               canvas.value.getBoundingClientRect().top +
               250 +
-              5.0 * component.pos.y -
-              5.0 * (component.height / 2),
+              getZoomScale(module) * component.pos.y -
+              getZoomScale(module) * (component.height / 2),
           };
           showComponentMenu.value = true;
         }
       } else {
         selectedComponent.value = null;
-        highlightedComponent.value = null;
+        showComponentMenu.value = false;
       }
       break;
     }
     case "move_module": {
+      const module =
+        circuit.value?.layers[selectedLayer.value].modules[
+          selectedModule.value ?? ""
+        ];
+      if (!module) {
+        break;
+      }
       canvasMode.value = "view_layer";
       document.body.style.cursor = "auto";
-      selectedModule.value = null;
+      showModuleMenu.value = true;
+      selectedModulePos.value = {
+        x:
+          canvas.value.getBoundingClientRect().left +
+          module.pos.x +
+          module.radius * 1.5,
+        y:
+          canvas.value.getBoundingClientRect().top +
+          module.pos.y -
+          module.radius,
+      };
       break;
     }
     case "move_component": {
+      const module =
+        circuit.value?.layers[selectedLayer.value].modules[
+          selectedModule.value ?? ""
+        ];
+      if (!module) {
+        showComponentMenu.value = false;
+        return null;
+      }
+      const component = module.components[selectedComponent.value ?? ""];
+      if (!component) {
+        showComponentMenu.value = false;
+        return null;
+      }
       canvasMode.value = "view_module";
       document.body.style.cursor = "auto";
-      selectedComponent.value = null;
+      showComponentMenu.value = true;
+      selectedComponentPos.value = {
+        x:
+          canvas.value.getBoundingClientRect().left +
+          250 +
+          getZoomScale(module) * component.pos.x +
+          getZoomScale(module) * (component.width / 2) * 1.5,
+        y:
+          canvas.value.getBoundingClientRect().top +
+          250 +
+          getZoomScale(module) * component.pos.y -
+          getZoomScale(module) * (component.height / 2),
+      };
+      break;
+    }
+    case "merge_modules": {
+      const moduleRef = getModuleClicked(
+        event.offsetX,
+        event.offsetY,
+        circuit.value?.layers[selectedLayer.value] ?? null
+      );
+      if (moduleRef) {
+        if (moduleRef === selectedModule.value) {
+          break;
+        }
+        if (mergeModules.value.includes(moduleRef)) {
+          mergeModules.value = mergeModules.value.filter(
+            (ref) => ref !== moduleRef
+          );
+        } else {
+          mergeModules.value = mergeModules.value.concat([moduleRef]);
+        }
+      }
       break;
     }
   }
@@ -593,6 +723,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
         canvasMode.value = "view_layer";
         document.body.style.cursor = "auto";
         selectedModule.value = null;
+        showComponentMenu.value = false;
         break;
       }
       case "view_layer": {
@@ -617,19 +748,24 @@ const handleKeyDown = (event: KeyboardEvent) => {
         if (!canvas.value) {
           return;
         }
-        const component =
+        const module =
           circuit.value?.layers[selectedLayer.value].modules[
-            selectedModule.value
-          ].components[selectedComponent.value];
+            selectedModule.value ?? ""
+          ];
+        if (!module) {
+          showComponentMenu.value = false;
+          return null;
+        }
+        const component = module.components[selectedComponent.value ?? ""];
         if (!component) {
           return;
         }
         circuit.value = moveComponent(
           selectedComponentPos.value.x -
-            5.0 * (component.width / 2) * 1.5 -
+            getZoomScale(module) * (component.width / 2) * 1.5 -
             canvas.value.getBoundingClientRect().left,
           selectedComponentPos.value.y +
-            5.0 * (component.height / 2) -
+            getZoomScale(module) * (component.height / 2) -
             canvas.value.getBoundingClientRect().top,
           selectedComponent.value,
           selectedModule.value,
@@ -637,6 +773,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
           circuit.value
         );
         canvasMode.value = "view_module";
+        showComponentMenu.value = true;
         break;
       }
       case "move_module": {
@@ -668,6 +805,13 @@ const handleKeyDown = (event: KeyboardEvent) => {
           circuit.value
         );
         canvasMode.value = "view_layer";
+        showModuleMenu.value = true;
+        break;
+      }
+      case "merge_modules": {
+        canvasMode.value = "view_layer";
+        mergeModules.value = [];
+        showModuleMenu.value = true;
         break;
       }
     }
