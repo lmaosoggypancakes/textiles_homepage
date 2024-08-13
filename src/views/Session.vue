@@ -150,11 +150,37 @@
   >
     Merge
   </div>
+  <div
+    class="absolute w-10 p-1 m-1 text-center bg-iris font-semibold hover:cursor-pointer hover:bg-iris/80 rounded-sm"
+    :style="{
+      left: `${
+        (canvas?.getBoundingClientRect().left ?? 0) +
+        (canvas?.getBoundingClientRect().width ?? 0)
+      }px`,
+      top: `${(canvas?.getBoundingClientRect().top ?? 0) + 8}px`,
+      marginLeft: '-48px',
+    }"
+    @click="drawTracesHandler"
+    v-if="canvasMode === 'view_module' ? true : null"
+  >
+    <WrenchIcon />
+  </div>
+  <div
+    class="absolute p-1 m-1 text-center text-white font-semibold bg-transparent"
+    :style="{
+      left: `${canvas?.getBoundingClientRect().left ?? 0}px`,
+      top: `${(canvas?.getBoundingClientRect().top ?? 0) + 8}px`,
+      width: '500px',
+    }"
+    v-if="showCanvasMessage ? true : null"
+  >
+    {{ canvasMessage }}
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 import {
   type PhysicalNode,
   type Constraint,
@@ -169,16 +195,27 @@ import svg from "@/assets/module.svg";
 import { _renderCircuit, _renderLayer, _renderModule } from "@/features/render";
 import {
   _mergeModules,
+  addPosition,
+  eqPosition,
   getComponentClicked,
+  getComponentConnections,
   getModuleClicked,
+  getMousePosOnCanvas,
+  getPinClicked,
+  getTraceBendPoints,
   getZoomScale,
   moveComponent,
   moveModule,
   rotate90Component,
   rotate90Module,
+  updateTrace,
 } from "@/features/editCircuit";
 import ModuleMenu from "@/components/ModuleMenu.vue";
-import { ArrowsPointingInIcon, XMarkIcon } from "@heroicons/vue/24/outline";
+import {
+  ArrowsPointingInIcon,
+  WrenchIcon,
+  XMarkIcon,
+} from "@heroicons/vue/24/outline";
 import ComponentMenu from "@/components/ComponentMenu.vue";
 import { useWebSocket } from "@/stores/websocket";
 import { storeToRefs } from "pinia";
@@ -193,6 +230,8 @@ const selectedModulePos = ref<Position>({ x: 0.0, y: 0.0 });
 const highlightedModule = ref<string | null>(null);
 const showModuleMenu = ref<boolean>(false);
 const mergeModules = ref<string[]>([]);
+const selectedTrace = ref<string | string[]>([]);
+const drawnPoints = ref<Position[]>([]);
 
 const selectedComponent = ref<string | null>(null);
 const selectedComponentPos = ref<Position>({ x: 0.0, y: 0.0 });
@@ -205,7 +244,10 @@ const canvasMode = ref<
   | "move_module"
   | "move_component"
   | "merge_modules"
+  | "draw_traces"
 >("view_layer");
+const showCanvasMessage = ref<boolean>(false);
+const canvasMessage = ref<string>("");
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 const message = ref("");
@@ -268,7 +310,8 @@ function renderView() {
     renderLayer();
   } else if (
     canvasMode.value === "view_module" ||
-    canvasMode.value === "move_component"
+    canvasMode.value === "move_component" ||
+    canvasMode.value === "draw_traces"
   ) {
     renderModule();
   }
@@ -349,6 +392,7 @@ function viewLayerHandler() {
 function moveComponentHandler() {
   canvasMode.value = "move_component";
   showComponentMenu.value = false;
+  document.body.style.cursor = "move";
   renderView();
 }
 
@@ -404,6 +448,14 @@ function rotateModuleHandler() {
   renderView();
 }
 
+function drawTracesHandler() {
+  canvasMode.value = "draw_traces";
+  document.body.style.cursor = "crosshair";
+  showCanvasMessage.value = true;
+  canvasMessage.value = "Select the first pin to connect";
+  renderView();
+}
+
 const handleDrawStart = (event: MouseEvent) => {
   if (enableDrawConstraint.value) {
     paths.value.push([]);
@@ -450,6 +502,7 @@ const handleDrawEnd = (event: MouseEvent) => {
     enableDrawConstraint.value = false;
   }
 };
+
 const handleDrag = (event: MouseEvent) => {
   if (enableDrawConstraint.value) {
     const canvas = event.target as HTMLCanvasElement;
@@ -497,12 +550,56 @@ const handleDrag = (event: MouseEvent) => {
       }
       break;
     }
+    case "draw_traces": {
+      const module =
+        circuit.value?.layers[selectedLayer.value].modules[
+          selectedModule.value ?? ""
+        ];
+      if (!module) {
+        return;
+      }
+      const componentRef = getComponentClicked(
+        event.offsetX,
+        event.offsetY,
+        module,
+        true
+      );
+      if (componentRef) {
+        highlightedComponent.value = componentRef;
+      } else {
+        highlightedComponent.value = null;
+      }
+      if (typeof selectedTrace.value === "string") {
+        if (!circuit.value) {
+          break;
+        }
+        if (!selectedModule.value) {
+          break;
+        }
+        const pointsToDraw = [
+          ...drawnPoints.value,
+          ...getTraceBendPoints(
+            getMousePosOnCanvas(event.offsetX, event.offsetY, module),
+            drawnPoints.value,
+            module
+          ),
+        ];
+        circuit.value = updateTrace(
+          pointsToDraw,
+          selectedTrace.value,
+          selectedModule.value,
+          selectedLayer.value,
+          circuit.value
+        );
+      }
+      break;
+    }
     case "move_module": {
       if (!circuit.value) {
-        return null;
+        break;
       }
       if (!selectedModule.value) {
-        return null;
+        break;
       }
       circuit.value = moveModule(
         event.offsetX,
@@ -515,13 +612,13 @@ const handleDrag = (event: MouseEvent) => {
     }
     case "move_component": {
       if (!circuit.value) {
-        return null;
+        break;
       }
       if (!selectedModule.value) {
-        return null;
+        break;
       }
       if (!selectedComponent.value) {
-        return null;
+        break;
       }
 
       circuit.value = moveComponent(
@@ -532,6 +629,7 @@ const handleDrag = (event: MouseEvent) => {
         selectedLayer.value,
         circuit.value
       );
+      break;
     }
   }
   renderView();
@@ -698,6 +796,126 @@ const handleClick = (event: MouseEvent) => {
       }
       break;
     }
+    case "draw_traces": {
+      const module =
+        circuit.value?.layers[selectedLayer.value].modules[
+          selectedModule.value ?? ""
+        ];
+      if (!module) {
+        break;
+      }
+      const componentRef = getComponentClicked(
+        event.offsetX,
+        event.offsetY,
+        module,
+        true
+      );
+      const pinNum = getPinClicked(
+        event.offsetX,
+        event.offsetY,
+        componentRef,
+        module,
+        true
+      );
+
+      if (componentRef && pinNum) {
+        const clickedPinPos = addPosition(
+          module.components[componentRef].pos,
+          module.components[componentRef].pin_coords[pinNum - 1]
+        );
+        if (
+          typeof selectedTrace.value === "object" &&
+          selectedTrace.value.length === 0
+        ) {
+          drawnPoints.value = [clickedPinPos];
+          selectedTrace.value = getComponentConnections(componentRef, module)
+            .filter((trace) => trace.a.pin === pinNum || trace.b.pin === pinNum)
+            .map((trace) => trace.ref);
+          canvasMessage.value = "Select the second pin to connect";
+          break;
+        } else if (
+          typeof selectedTrace.value === "object" &&
+          drawnPoints.value.length === 1
+        ) {
+          const firstPoint = drawnPoints.value[0];
+          const traceToDraw = selectedTrace.value.reduce<string>(
+            (result, tRef): string => {
+              if (result.length > 0) {
+                return result;
+              }
+              const trace = module.connections[tRef];
+              if (!eqPosition(firstPoint, clickedPinPos)) {
+                if (
+                  (trace.a.ref === componentRef && trace.a.pin === pinNum) ||
+                  (trace.b.ref === componentRef && trace.b.pin === pinNum)
+                ) {
+                  return trace.ref;
+                }
+              }
+              return result;
+            },
+            ""
+          );
+          if (traceToDraw !== "") {
+            selectedTrace.value = traceToDraw;
+            canvasMessage.value = "Draw the line";
+          }
+          break;
+        } else if (
+          typeof selectedTrace.value === "string" &&
+          drawnPoints.value.length >= 1
+        ) {
+          const trace = module.connections[selectedTrace.value];
+          const firstPoint = drawnPoints.value[0];
+          const pinPos = module.components[componentRef].pin_coords[pinNum - 1];
+          if (
+            trace.a.ref === componentRef &&
+            trace.a.pin === pinNum &&
+            !eqPosition(firstPoint, pinPos)
+          ) {
+            const bendPoints = getTraceBendPoints(
+              trace.a.pos,
+              drawnPoints.value,
+              module
+            );
+            trace.points = drawnPoints.value.concat(bendPoints);
+            canvasMode.value = "view_module";
+            canvasMessage.value = "";
+            showCanvasMessage.value = false;
+            selectedTrace.value = [];
+            drawnPoints.value = [];
+            break;
+          } else if (
+            trace.b.ref === componentRef &&
+            trace.b.pin === pinNum &&
+            !eqPosition(firstPoint, pinPos)
+          ) {
+            const bendPoints = getTraceBendPoints(
+              trace.b.pos,
+              drawnPoints.value,
+              module
+            );
+            trace.points = drawnPoints.value.concat(bendPoints);
+            canvasMode.value = "view_module";
+            canvasMessage.value = "";
+            showCanvasMessage.value = false;
+            selectedTrace.value = [];
+            drawnPoints.value = [];
+            break;
+          } else {
+            break;
+          }
+        }
+      } else if (typeof selectedTrace.value === "string") {
+        const points = getTraceBendPoints(
+          getMousePosOnCanvas(event.offsetX, event.offsetY, module),
+          drawnPoints.value,
+          module
+        );
+        drawnPoints.value = drawnPoints.value.concat([points[0]]);
+        break;
+      }
+    }
   }
   renderView();
 };
@@ -801,6 +1019,30 @@ const handleKeyDown = (event: KeyboardEvent) => {
         showModuleMenu.value = true;
         break;
       }
+      case "draw_traces": {
+        if (!selectedModule.value) {
+          return;
+        }
+        if (!circuit.value) {
+          return;
+        }
+        canvasMode.value = "view_module";
+        drawnPoints.value = [];
+        document.body.style.cursor = "auto";
+        showCanvasMessage.value = false;
+        canvasMessage.value = "";
+        if (typeof selectedTrace.value === "string") {
+          circuit.value = updateTrace(
+            drawnPoints.value,
+            selectedTrace.value,
+            selectedModule.value,
+            selectedLayer.value,
+            circuit.value
+          );
+        }
+        selectedTrace.value = [];
+        break;
+      }
     }
   }
   renderView();
@@ -880,7 +1122,6 @@ const getProcessing = () => {
 };
 const onNewGraph = (newCircuit: Circuit) => {
   circuit.value = newCircuit;
-  console.log(newCircuit);
   const layer_refs = Object.keys(circuit.value?.layers ?? {});
   document.addEventListener("keydown", handleKeyDown);
   if (layer_refs && layer_refs.length > 0) {

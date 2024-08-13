@@ -1,5 +1,5 @@
 import type { Circuit, Footprint, Layer, Module } from "types";
-import { getZoomScale } from "./editCircuit";
+import { getModuleConnections, getZoomScale } from "./editCircuit";
 
 export function _renderCircuit(
   circuit: Circuit,
@@ -144,18 +144,66 @@ export function _renderModule(
     .map((ref) => module.connections[ref])
     .forEach((connection) => {
       const scale = zoomed_in ? getZoomScale(module) : 1;
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
-      ctx.beginPath();
-      ctx.moveTo(
-        module_x + scale * connection.a.pos.x,
-        module_y + scale * connection.a.pos.y
-      );
-      ctx.lineTo(
-        module_x + scale * connection.b.pos.x,
-        module_y + scale * connection.b.pos.y
-      );
-      ctx.stroke();
+      if (connection.points.length === 0) {
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
+        ctx.beginPath();
+        ctx.moveTo(
+          module_x + scale * connection.a.pos.x,
+          module_y + scale * connection.a.pos.y
+        );
+        ctx.lineTo(
+          module_x + scale * connection.b.pos.x,
+          module_y + scale * connection.b.pos.y
+        );
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        connection.points.forEach((point, i) => {
+          ctx.lineWidth = scale * 4;
+          ctx.strokeStyle = ctx.fillStyle = "#ba2f";
+          if (i == 0) {
+            ctx.moveTo(module_x + scale * point.x, module_y + scale * point.y);
+          } else {
+            ctx.lineTo(module_x + scale * point.x, module_y + scale * point.y);
+          }
+        });
+        ctx.stroke();
+        if (
+          connection.points[0].x === connection.a.pos.x &&
+          connection.points[0].y === connection.a.pos.y
+        ) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
+          ctx.beginPath();
+          ctx.moveTo(
+            module_x + scale * connection.b.pos.x,
+            module_y + scale * connection.b.pos.y
+          );
+          ctx.lineTo(
+            module_x +
+              scale * connection.points[connection.points.length - 1].x,
+            module_y + scale * connection.points[connection.points.length - 1].y
+          );
+          ctx.stroke();
+        } else if (
+          connection.points[0].x === connection.b.pos.x &&
+          connection.points[0].y === connection.b.pos.y
+        ) {
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
+          ctx.beginPath();
+          ctx.moveTo(
+            module_x + scale * connection.a.pos.x,
+            module_y + scale * connection.a.pos.y
+          );
+          ctx.lineTo(
+            module_x + scale * connection.points[0].x,
+            module_y + scale * connection.points[0].y
+          );
+          ctx.stroke();
+        }
+      }
     });
 }
 

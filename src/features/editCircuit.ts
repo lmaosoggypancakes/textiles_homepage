@@ -44,6 +44,10 @@ export function rotate90Position(pos: Position): Position {
   };
 }
 
+export function eqPosition(a: Position, b: Position): boolean {
+  return a.x === b.x && a.y === b.y;
+}
+
 export function getModuleClicked(
   click_x: number,
   click_y: number,
@@ -74,9 +78,9 @@ export function getComponentClicked(
   if (!module) {
     return null;
   }
-  for (const comopnentRef in module.components) {
+  for (const componentRef in module.components) {
     const scale = zoomed_in ? getZoomScale(module) : 1.0;
-    const component = module.components[comopnentRef];
+    const component = module.components[componentRef];
     const componentPos = component.pos;
     const module_x = zoomed_in ? 250 : module.pos.x;
     const module_y = zoomed_in ? 250 : module.pos.y;
@@ -94,6 +98,46 @@ export function getComponentClicked(
     }
   }
   return null;
+}
+
+export function getPinClicked(
+  clickX: number,
+  clickY: number,
+  componentRef: string | null,
+  module: Module | null,
+  zoomed_in: boolean
+): number | null {
+  if (!componentRef) {
+    return null;
+  }
+  if (!module) {
+    return null;
+  }
+  const component = module.components[componentRef];
+  return component.pin_coords.reduce<number | null>(
+    (clicked, coord, i): number | null => {
+      if (clicked != null) {
+        return clicked;
+      }
+      const scale = zoomed_in ? getZoomScale(module) : 1.0;
+      const module_x = zoomed_in ? 250 : module.pos.x;
+      const module_y = zoomed_in ? 250 : module.pos.y;
+      const distance_x =
+        clickX - (scale * (coord.x + component.pos.x) + module_x);
+      const distance_y =
+        clickY - (scale * (coord.y + component.pos.y) + module_y);
+      const width = 8.0;
+      const height = 8.0;
+      if (
+        Math.abs(distance_x) < (width * scale) / 2 &&
+        Math.abs(distance_y) < (height * scale) / 2
+      ) {
+        return i + 1;
+      }
+      return null;
+    },
+    null
+  );
 }
 
 export function getModuleConnections(moduleRef: string, layer: Layer): Trace[] {
@@ -132,7 +176,6 @@ export function moveModule(
     moduleRef,
     circuit.layers[layer]
   );
-  console.log(moduleConnections);
   moduleConnections.forEach((conn) => {
     const new_conn = conn;
     const a_pin_diff_x = new_conn.a.pos.x - module.pos.x;
@@ -147,7 +190,6 @@ export function moveModule(
       new_conn.b.pos.x = mouse_x + b_pin_diff_x;
       new_conn.b.pos.y = mouse_y + b_pin_diff_y;
     }
-    console.log(new_conn.ref);
     circuit.layers[layer].connections[new_conn.ref] = new_conn;
   });
   circuit.layers[layer].modules[moduleRef].pos.x = mouse_x;
@@ -348,7 +390,6 @@ export function moveComponent(
         new_conn.b.pos.x = offset_x + module.pos.x;
         new_conn.b.pos.y = offset_y + module.pos.y;
       }
-      console.log(conn.ref);
       circuit.layers[layer].connections[conn.ref] = new_conn;
     });
   }
@@ -377,7 +418,6 @@ export function rotate90Component(
         component.pos,
         component.pin_coords[trace.a.pin - 1]
       );
-      trace.points[0] = { ...trace.a.pos };
     } else if (
       trace.b.ref === componentRef &&
       typeof trace.b.pin === "number"
@@ -386,7 +426,6 @@ export function rotate90Component(
         component.pos,
         component.pin_coords[trace.b.pin - 1]
       );
-      trace.points[trace.points.length - 1] = { ...trace.b.pos };
     }
   });
   return circuit;
@@ -543,7 +582,7 @@ export function _mergeModules(
             ref: new_ref,
             a: { ...conn.a, pos: a_pos },
             b: { ...conn.b, pos: b_pos },
-            points: [a_pos, b_pos],
+            points: [],
           },
         };
       },
@@ -602,12 +641,9 @@ export function _mergeModules(
               ...b_node,
               pos: b_pos,
             },
-            points: [a_pos, b_pos],
+            points: [],
           };
-          new_module.connections = {
-            ...new_module.connections,
-            new_ref: new_trace,
-          };
+          new_module.connections[new_ref] = new_trace;
           return [...deleteTraces, trace.ref];
         }
         const conn = circuit.layers[layer].connections[trace.ref];
@@ -654,12 +690,9 @@ export function _mergeModules(
               ref: new_ref,
               a: a_node,
               b: b_node,
-              points: [a_node.pos, b_node.pos],
+              points: [],
             };
-            new_module.connections = {
-              ...new_module.connections,
-              new_ref: pad_trace,
-            };
+            new_module.connections[new_ref] = pad_trace;
           }
           conn.a.ref = new_ref;
           conn.a.pos = addPosition(pad_pos, new_module.pos);
@@ -706,12 +739,9 @@ export function _mergeModules(
               ref: new_ref,
               a: a_node,
               b: b_node,
-              points: [a_node.pos, b_node.pos],
+              points: [],
             };
-            new_module.connections = {
-              ...new_module.connections,
-              new_ref: pad_trace,
-            };
+            new_module.connections[new_ref] = pad_trace;
           }
           conn.b.ref = new_ref;
           conn.b.pos = addPosition(pad_pos, new_module.pos);
@@ -729,4 +759,71 @@ export function _mergeModules(
   });
   circuit.layers[layer].modules[new_ref] = new_module;
   return [circuit, new_ref];
+}
+
+export function getMousePosOnCanvas(
+  mouseX: number,
+  mouseY: number,
+  module: Module | null
+): Position {
+  if (!module) {
+    return { x: mouseX, y: mouseY };
+  }
+  const offsetX = (mouseX - 250) / getZoomScale(module);
+  const offsetY = (mouseY - 250) / getZoomScale(module);
+  return { x: offsetX, y: offsetY };
+}
+
+export function getTraceBendPoints(
+  pos: Position,
+  drawnPoints: Position[],
+  module: Module | null
+): Position[] {
+  if (!module) {
+    return [];
+  }
+  const lastPoint = drawnPoints[drawnPoints.length - 1];
+  const offsetX = pos.x;
+  const offsetY = pos.y;
+  const diffX = offsetX - lastPoint.x;
+  const diffY = offsetY - lastPoint.y;
+  const absDiffX = Math.abs(diffX);
+  const absDiffY = Math.abs(diffY);
+  if (absDiffX > absDiffY) {
+    if (diffX < 0) {
+      return [
+        { x: offsetX + Math.abs(diffY), y: offsetY - diffY },
+        { x: offsetX, y: offsetY },
+      ];
+    }
+    return [
+      { x: offsetX - Math.abs(diffY), y: offsetY - diffY },
+      { x: offsetX, y: offsetY },
+    ];
+  } else if (absDiffX < absDiffY) {
+    if (diffY < 0) {
+      return [
+        { x: offsetX - diffX, y: offsetY + Math.abs(diffX) },
+        { x: offsetX, y: offsetY },
+      ];
+    }
+    return [
+      { x: offsetX - diffX, y: offsetY - Math.abs(diffX) },
+      { x: offsetX, y: offsetY },
+    ];
+  } else {
+    return [{ x: offsetX, y: offsetY }];
+  }
+}
+
+export function updateTrace(
+  points: Position[],
+  traceRef: string,
+  moduleRef: string,
+  layer: string,
+  circuit: Circuit
+): Circuit {
+  circuit.layers[layer].modules[moduleRef].connections[traceRef].points =
+    points;
+  return circuit;
 }
