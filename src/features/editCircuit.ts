@@ -232,7 +232,7 @@ function calculate360Angle(offset_x: number, offset_y: number): number {
 }
 
 function getPadPos(padPos: number, r: number, angle: number): [number, number] {
-  const radius = r - 4;
+  const radius = r;
   const radians = (angle * Math.PI) / 180;
   switch (padPos) {
     case 0: {
@@ -243,14 +243,14 @@ function getPadPos(padPos: number, r: number, angle: number): [number, number] {
     }
     case 1: {
       return [
-        radius * Math.cos((Math.PI * 7) / 16 + radians),
-        radius * Math.sin((Math.PI * 7) / 16 + radians),
+        radius * Math.cos((Math.PI * 5) / 12 + radians),
+        radius * Math.sin((Math.PI * 5) / 12 + radians),
       ];
     }
     case 2: {
       return [
-        radius * Math.cos((Math.PI * 9) / 16 + radians),
-        radius * Math.sin((Math.PI * 9) / 16 + radians),
+        radius * Math.cos((Math.PI * 7) / 12 + radians),
+        radius * Math.sin((Math.PI * 7) / 12 + radians),
       ];
     }
     case 3: {
@@ -267,14 +267,14 @@ function getPadPos(padPos: number, r: number, angle: number): [number, number] {
     }
     case 5: {
       return [
-        radius * Math.cos((Math.PI * 23) / 16 + radians),
-        radius * Math.sin((Math.PI * 23) / 16 + radians),
+        radius * Math.cos((Math.PI * 17) / 12 + radians),
+        radius * Math.sin((Math.PI * 17) / 12 + radians),
       ];
     }
     case 6: {
       return [
-        radius * Math.cos((Math.PI * 25) / 16 + radians),
-        radius * Math.sin((Math.PI * 25) / 16 + radians),
+        radius * Math.cos((Math.PI * 19) / 12 + radians),
+        radius * Math.sin((Math.PI * 19) / 12 + radians),
       ];
     }
     case 7: {
@@ -432,7 +432,7 @@ export function rotate90Component(
 }
 
 export function getZoomScale(module: Module): number {
-  return 200 / module.radius;
+  return 200 / (module.radius + 10);
 }
 
 export function getPadToComponent(

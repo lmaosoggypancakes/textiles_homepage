@@ -63,27 +63,65 @@ export function _renderModule(
   if (!module) {
     return null;
   }
+  const scale = zoomed_in ? getZoomScale(module) : 1;
   const module_x = zoomed_in ? 250 : module.pos.x;
   const module_y = zoomed_in ? 250 : module.pos.y;
-  const module_radius = zoomed_in
-    ? module.radius * getZoomScale(module)
-    : module.radius;
+  const module_radius = module.radius * scale;
+  const outer_radius = (module.radius + 15) * scale;
   ctx.beginPath();
-  ctx.arc(module_x, module_y, module_radius, 0, 2 * Math.PI);
+  ctx.arc(module_x, module_y, outer_radius, 0, 2 * Math.PI);
   ctx.fillStyle = "#431";
   ctx.fill();
   if (highlighted) {
     ctx.beginPath();
-    ctx.arc(module_x, module_y, module_radius + 0.5, 0, 2 * Math.PI);
-    ctx.lineWidth = 1;
+    ctx.arc(module_x, module_y, outer_radius, 0, 2 * Math.PI);
     ctx.fillStyle = "#542";
     ctx.fill();
   }
   if (selected) {
     ctx.beginPath();
-    ctx.arc(module_x, module_y, module_radius, 0, 2 * Math.PI);
+    ctx.arc(module_x, module_y, outer_radius, 0, 2 * Math.PI);
     ctx.lineWidth = 1;
     ctx.fillStyle = "#653";
+    ctx.fill();
+  }
+
+  for (let idx = 0; idx < 8; idx++) {
+    ctx.beginPath();
+    const start_rad =
+      Math.PI / 6 +
+      idx * (Math.PI / 6) +
+      (idx >= 4 ? Math.PI / 3 : 0) +
+      Math.PI / 36 +
+      (module.angle * Math.PI) / 180;
+    const end_rad =
+      Math.PI / 6 +
+      (idx + 1) * (Math.PI / 6) +
+      (idx >= 4 ? Math.PI / 3 : 0) -
+      Math.PI / 36 +
+      (module.angle * Math.PI) / 180;
+    ctx.moveTo(
+      outer_radius * Math.cos(start_rad) + module_x,
+      outer_radius * Math.sin(start_rad) + module_y
+    );
+    ctx.arc(module_x, module_y, outer_radius, start_rad, end_rad);
+    ctx.lineTo(
+      module_radius * Math.cos(end_rad) + module_x,
+      module_radius * Math.sin(end_rad) + module_y
+    );
+    ctx.arc(module_x, module_y, module_radius, end_rad, start_rad, true);
+    ctx.lineTo(
+      outer_radius * Math.cos(start_rad) + module_x,
+      outer_radius * Math.sin(start_rad) + module_y
+    );
+    ctx.fillStyle = "#ba2f";
+    if (highlighted) {
+      ctx.fillStyle = "#cb3f";
+    }
+    if (selected) {
+      ctx.fillStyle = "#fe6f";
+    }
+    ctx.closePath();
     ctx.fill();
   }
 
@@ -92,12 +130,8 @@ export function _renderModule(
     if (!component) {
       return;
     }
-    const component_x = zoomed_in
-      ? getZoomScale(module) * component.pos.x
-      : component.pos.x;
-    const component_y = zoomed_in
-      ? getZoomScale(module) * component.pos.y
-      : component.pos.y;
+    const component_x = scale * component.pos.x;
+    const component_y = scale * component.pos.y;
     const base_x = module_x + component_x;
     const base_y = module_y + component_y;
     if (component.ref !== "") {
@@ -117,7 +151,7 @@ export function _renderModule(
               ctx,
               highlightedComponent === component.ref,
               selectedComponent === component.ref,
-              zoomed_in ? getZoomScale(module) : 1.0,
+              scale,
               component.angle
             );
           }
@@ -134,7 +168,7 @@ export function _renderModule(
           ctx,
           highlightedComponent === component.ref,
           selectedComponent === component.ref,
-          zoomed_in ? getZoomScale(module) : 1.0,
+          scale,
           component.angle
         );
       }
@@ -143,7 +177,6 @@ export function _renderModule(
   Object.keys(module.connections)
     .map((ref) => module.connections[ref])
     .forEach((connection) => {
-      const scale = zoomed_in ? getZoomScale(module) : 1;
       if (connection.points.length === 0) {
         ctx.lineWidth = 2;
         ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";
@@ -198,8 +231,9 @@ export function _renderModule(
             module_y + scale * connection.a.pos.y
           );
           ctx.lineTo(
-            module_x + scale * connection.points[0].x,
-            module_y + scale * connection.points[0].y
+            module_x +
+              scale * connection.points[connection.points.length - 1].x,
+            module_y + scale * connection.points[connection.points.length - 1].y
           );
           ctx.stroke();
         }

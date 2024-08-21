@@ -1100,11 +1100,12 @@ const leaveBreakoutMode = () => {
 const getSVG = () => {
   ws.send(
     JSON.stringify({
-      label: "give_svg_pwease",
-      depth: stretchDepth.value / 10,
-      nodes: nodes.value,
-      stretchification: stretchification.value,
-      points: points.value,
+      label: "get_svg",
+      // depth: stretchDepth.value / 10,
+      // nodes: nodes.value,
+      // stretchification: stretchification.value,
+      // points: points.value,
+      circuit: circuit.value,
     })
   );
 };
