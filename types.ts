@@ -84,6 +84,7 @@ export interface ConnectionNode {
   ref: string;
   pin: number | string;
   pos: Position;
+  net_name: string;
 }
 
 export interface Trace {
@@ -91,6 +92,7 @@ export interface Trace {
   a: ConnectionNode;
   b: ConnectionNode;
   points: Position[];
+  net_name: string;
 }
 
 export interface Component {
@@ -103,6 +105,7 @@ export interface Component {
   width: number;
   height: number;
   angle: number;
+  net_names: string[];
 }
 
 export interface Module {

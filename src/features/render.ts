@@ -177,6 +177,23 @@ export function _renderModule(
   Object.keys(module.connections)
     .map((ref) => module.connections[ref])
     .forEach((connection) => {
+      if (zoomed_in) {
+        ctx.save();
+        ctx.font = "16px";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "white";
+        ctx.fillText(
+          connection.a.net_name,
+          module_x + scale * connection.a.pos.x,
+          module_y + scale * connection.a.pos.y
+        );
+        ctx.fillText(
+          connection.b.net_name,
+          module_x + scale * connection.b.pos.x,
+          module_y + scale * connection.b.pos.y
+        );
+        ctx.restore();
+      }
       if (connection.points.length === 0) {
         ctx.lineWidth = 2;
         ctx.strokeStyle = ctx.fillStyle = "#9ccfd8";

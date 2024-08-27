@@ -583,6 +583,7 @@ export function _mergeModules(
             a: { ...conn.a, pos: a_pos },
             b: { ...conn.b, pos: b_pos },
             points: [],
+            net_name: conn.net_name,
           },
         };
       },
@@ -642,6 +643,7 @@ export function _mergeModules(
               pos: b_pos,
             },
             points: [],
+            net_name: trace.net_name,
           };
           new_module.connections[new_ref] = new_trace;
           return [...deleteTraces, trace.ref];
@@ -663,6 +665,7 @@ export function _mergeModules(
             ref: conn.a.pin,
             pin: 1,
             pos: pad_pos,
+            net_name: conn.net_name,
           };
           const compRef = conn.a.pin.split("-")[1];
           const compPin = Number(conn.a.pin.split("-")[2]);
@@ -675,6 +678,7 @@ export function _mergeModules(
                 new_components[compRef].pos
               ),
             },
+            net_name: conn.net_name,
           };
           if (
             !checkComponentsConnection(
@@ -691,6 +695,7 @@ export function _mergeModules(
               a: a_node,
               b: b_node,
               points: [],
+              net_name: conn.net_name,
             };
             new_module.connections[new_ref] = pad_trace;
           }
@@ -712,6 +717,7 @@ export function _mergeModules(
             ref: conn.b.pin,
             pin: 1,
             pos: pad_pos,
+            net_name: conn.net_name,
           };
           const compRef = conn.b.pin.split("-")[1];
           const compPin = Number(conn.b.pin.split("-")[2]);
@@ -724,6 +730,7 @@ export function _mergeModules(
                 new_components[compRef].pos
               ),
             },
+            net_name: conn.net_name,
           };
           if (
             !checkComponentsConnection(
@@ -740,6 +747,7 @@ export function _mergeModules(
               a: a_node,
               b: b_node,
               points: [],
+              net_name: conn.net_name,
             };
             new_module.connections[new_ref] = pad_trace;
           }
@@ -826,4 +834,18 @@ export function updateTrace(
   circuit.layers[layer].modules[moduleRef].connections[traceRef].points =
     points;
   return circuit;
+}
+
+export function updateModuleRadius(
+  newRadius: number,
+  moduleRef: string,
+  layer: string,
+  circuit: Circuit
+): Circuit {
+  circuit.layers[layer].modules[moduleRef].radius = newRadius;
+  return circuit;
+}
+
+export function getNetName(comp: Component, pinNum: number) {
+  return comp.net_names[pinNum - 1];
 }

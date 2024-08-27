@@ -89,12 +89,14 @@
   </main>
   <ModuleMenu
     :pos="selectedModulePos"
-    :module_ref="selectedModule ?? ''"
+    :module-ref="selectedModule ?? ''"
+    :module-radius="selectedModuleRadius"
     @editModule="editModuleHandler"
     @move="moveModuleHandler"
     @rotate="rotateModuleHandler"
     @moveLayer="moveLayerHandler"
     @mergeModules="mergeModulesActionHandler"
+    @changeRadius="changeRadiusHandler"
     v-if="
       showModuleMenu
         ? circuit?.layers[selectedLayer].modules[selectedModule ?? ''] ?? ''
@@ -188,6 +190,7 @@ import {
   type Circuit,
   type Position,
   type Netlist,
+  type ConnectionNode,
 } from "../../types";
 import { isIn } from "@/../util";
 
@@ -201,6 +204,7 @@ import {
   getComponentConnections,
   getModuleClicked,
   getMousePosOnCanvas,
+  getNetName,
   getPinClicked,
   getTraceBendPoints,
   getZoomScale,
@@ -208,11 +212,13 @@ import {
   moveModule,
   rotate90Component,
   rotate90Module,
+  updateModuleRadius,
   updateTrace,
 } from "@/features/editCircuit";
 import ModuleMenu from "@/components/ModuleMenu.vue";
 import {
   ArrowsPointingInIcon,
+  PencilIcon,
   WrenchIcon,
   XMarkIcon,
 } from "@heroicons/vue/24/outline";
@@ -227,11 +233,13 @@ const selectedLayer = ref("");
 
 const selectedModule = ref<string | null>(null);
 const selectedModulePos = ref<Position>({ x: 0.0, y: 0.0 });
+const selectedModuleRadius = ref<number>(0);
 const highlightedModule = ref<string | null>(null);
 const showModuleMenu = ref<boolean>(false);
 const mergeModules = ref<string[]>([]);
 const selectedTrace = ref<string | string[]>([]);
 const drawnPoints = ref<Position[]>([]);
+const destPins = ref<ConnectionNode[]>([]);
 
 const selectedComponent = ref<string | null>(null);
 const selectedComponentPos = ref<Position>({ x: 0.0, y: 0.0 });
@@ -456,6 +464,22 @@ function drawTracesHandler() {
   renderView();
 }
 
+function changeRadiusHandler(newRadius: number) {
+  if (!selectedModule.value) {
+    return;
+  }
+  if (!circuit.value) {
+    return;
+  }
+  circuit.value = updateModuleRadius(
+    newRadius,
+    selectedModule.value,
+    selectedLayer.value,
+    circuit.value
+  );
+  renderView();
+}
+
 const handleDrawStart = (event: MouseEvent) => {
   if (enableDrawConstraint.value) {
     paths.value.push([]);
@@ -667,6 +691,7 @@ const handleClick = (event: MouseEvent) => {
               module.pos.y -
               module.radius,
           };
+          selectedModuleRadius.value = module.radius;
           showModuleMenu.value = true;
         }
       } else {
@@ -743,6 +768,7 @@ const handleClick = (event: MouseEvent) => {
           module.pos.y -
           module.radius,
       };
+      selectedModuleRadius.value = module.radius;
       break;
     }
     case "move_component": {
@@ -823,6 +849,7 @@ const handleClick = (event: MouseEvent) => {
           module.components[componentRef].pos,
           module.components[componentRef].pin_coords[pinNum - 1]
         );
+        const netName = getNetName(module.components[componentRef], pinNum - 1);
         if (
           typeof selectedTrace.value === "object" &&
           selectedTrace.value.length === 0
